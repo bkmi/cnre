@@ -5,7 +5,7 @@
 env/
 
 # Generated versions
-basicpython/__version__.py
+cnre/__version__.py
 
 # Hydra
 **/outputs/

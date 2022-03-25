@@ -1,3 +1,6 @@
 [submodule "remote/sbi"]
 	path = remote/sbi
 	url = git@github.com:bkmi/sbi.git
+[submodule "remote/sbibm"]
+	path = remote/sbibm
+	url = git@github.com:sbi-benchmark/sbibm.git

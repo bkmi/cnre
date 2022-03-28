@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn
-from sbi.inference.posteriors import MCMCPosterior, RejectionPosterior
+from sbi.inference.posteriors.mcmc_posterior import MCMCPosterior
+from sbi.inference.posteriors.rejection_posterior import RejectionPosterior
 from sbi.inference.potentials.ratio_based_potential import RatioBasedPotential
 from sbi.utils import mcmc_transform, repeat_rows
 from torch.distributions import Distribution

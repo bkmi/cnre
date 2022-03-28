@@ -1,0 +1,6 @@
+# @package hydra
+run:
+  dir: ${env:HOME}/results/single_run/${now:%Y-%m-%d}/${now:%H-%M-%S}
+sweep:
+  dir: ${env:HOME}/results/rq
+  subdir: ${hydra.job.id}

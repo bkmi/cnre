@@ -1,0 +1,7 @@
+name: RF-ABC
+run: pyabcranger.abcrf.run
+device: cpu
+params:
+  ntrees: 500
+  nthreads: 1
+  batch_size: 1000

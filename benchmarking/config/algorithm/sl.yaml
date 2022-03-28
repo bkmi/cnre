@@ -1,0 +1,12 @@
+name: SL
+run: sbi.sl.run
+device: cpu
+params:
+  num_simulations_per_step: 100
+  automatic_transforms_enabled: false
+  diag_eps: 0.
+  mcmc_parameters:
+    init_strategy: sir
+    num_chains: 1
+    thin: 1
+    warmup_steps: 1000

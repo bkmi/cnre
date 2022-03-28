@@ -1,0 +1,3 @@
+name: Prior
+run: pytorch.baseline_prior.run
+device: cpu

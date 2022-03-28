@@ -4,8 +4,8 @@ from typing import Any, Dict, Optional, Tuple
 import torch
 import torch.nn
 from sbi.inference.posteriors import MCMCPosterior, RejectionPosterior
-from sbi.inference.potentials import ratio_estimator_based_potential
-from sbi.utils import repeat_rows
+from sbi.inference.potentials.ratio_based_potential import RatioBasedPotential
+from sbi.utils import mcmc_transform, repeat_rows
 from torch.distributions import Distribution
 from tqdm import trange
 
@@ -81,19 +81,24 @@ def loss(
     theta: torch.Tensor,
     x: torch.Tensor,
     num_atoms: int,
-    alpha: float = 1.0,
-    reuse: bool = True,
+    alpha: float,
+    reuse: bool,
+    extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """num_atoms should include the always marginal draw, i.e. num_atoms = K + 1 with K possible jointly drawn samples and 1 marginal sample"""
     assert num_atoms >= 2
     assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
     batch_size = theta.shape[0]
     if reuse:
-        logits_marginal = classifier_logits(classifier, theta, x, num_atoms)
+        logits_marginal = classifier_logits(
+            classifier, theta, x, num_atoms, extra_theta
+        )
         logits_joint = torch.clone(logits_marginal)
     else:
-        logits_marginal = classifier_logits(classifier, theta, x, num_atoms)
-        logits_joint = classifier_logits(classifier, theta, x, num_atoms)
+        logits_marginal = classifier_logits(
+            classifier, theta, x, num_atoms, extra_theta
+        )
+        logits_joint = classifier_logits(classifier, theta, x, num_atoms, extra_theta)
 
     dtype = logits_marginal.dtype
     device = logits_marginal.device
@@ -172,7 +177,8 @@ def train(
     train_loader,
     val_loader,
     num_atoms: int = 2,
-    reuse: bool = False,
+    alpha: float = 1.0,
+    reuse: bool = True,
 ):
     best_network_state_dict = None
     min_loss = float("-Inf")
@@ -183,8 +189,8 @@ def train(
         # Training
         classifier.train()
         train_loss = 0
-        for x, theta in train_loader:
-            _loss = loss(classifier, theta, x, num_atoms, reuse=reuse)
+        for theta, x in train_loader:
+            _loss = loss(classifier, theta, x, num_atoms, alpha=alpha, reuse=reuse)
             _loss.backward()
             optimizer.step()
             train_loss += _loss.detach().cpu().mean().numpy()
@@ -194,8 +200,8 @@ def train(
         classifier.eval()
         with torch.no_grad():
             valid_loss = 0
-            for x, theta in val_loader:
-                _loss = loss(classifier, theta, x, num_atoms, reuse=reuse)
+            for theta, x in val_loader:
+                _loss = loss(classifier, theta, x, num_atoms, alpha=alpha, reuse=reuse)
                 valid_loss += _loss.detach().cpu().mean().numpy()
             valid_losses.append(valid_loss / len(val_loader))
             if epoch == 0 or min_loss > valid_loss:
@@ -211,12 +217,12 @@ def train(
 
 def get_sbi_posterior(
     ratio_estimator: torch.nn.Module,
-    x_shape: Tuple[int, ...],
     prior: Optional[Distribution] = None,
     sample_with: str = "rejection",
     mcmc_method: str = "slice_np",
     mcmc_parameters: Dict[str, Any] = {},
     rejection_sampling_parameters: Dict[str, Any] = {},
+    enable_transform: bool = True,
 ):
     """Try it.
 
@@ -239,8 +245,9 @@ def get_sbi_posterior(
             `RejectionPosterior`.
     """
     device = next(ratio_estimator.parameters()).device.type
-    potential_fn, theta_transform = ratio_estimator_based_potential(
-        ratio_estimator=ratio_estimator, prior=prior, x_o=None
+    potential_fn = RatioBasedPotential(ratio_estimator, prior, x_o=None, device=device)
+    theta_transform = mcmc_transform(
+        prior, device=device, enable_transform=enable_transform
     )
 
     if sample_with == "mcmc":
@@ -250,7 +257,6 @@ def get_sbi_posterior(
             proposal=prior,
             method=mcmc_method,
             device=device,
-            x_shape=x_shape,
             **mcmc_parameters,
         )
     elif sample_with == "rejection":
@@ -258,13 +264,71 @@ def get_sbi_posterior(
             potential_fn=potential_fn,
             proposal=prior,
             device=device,
-            x_shape=x_shape,
             **rejection_sampling_parameters,
         )
     else:
         raise NotImplementedError
 
     return posterior
+
+
+def get_dataloaders(
+    dataset: torch.utils.data.TensorDataset,
+    training_batch_size: int = 50,
+    validation_fraction: float = 0.1,
+    dataloader_kwargs: Optional[dict] = None,
+) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    """Return dataloaders for training and validation.
+
+    Args:
+        dataset: holding all theta and x, optionally masks.
+        training_batch_size: training arg of inference methods.
+        resume_training: Whether the current call is resuming training so that no
+            new training and validation indices into the dataset have to be created.
+        dataloader_kwargs: Additional or updated kwargs to be passed to the training
+            and validation dataloaders (like, e.g., a collate_fn).
+
+    Returns:
+        Tuple of dataloaders for training and validation.
+
+    """
+
+    # Get total number of training examples.
+    num_examples = len(dataset)
+
+    # Select random train and validation splits from (theta, x) pairs.
+    num_training_examples = int((1 - validation_fraction) * num_examples)
+    num_validation_examples = num_examples - num_training_examples
+
+    permuted_indices = torch.randperm(num_examples)
+    train_indices, val_indices = (
+        permuted_indices[:num_training_examples],
+        permuted_indices[num_training_examples:],
+    )
+
+    # Create training and validation loaders using a subset sampler.
+    # Intentionally use dicts to define the default dataloader args
+    # Then, use dataloader_kwargs to override (or add to) any of these defaults
+    # https://stackoverflow.com/questions/44784577/in-method-call-args-how-to-override-keyword-argument-of-unpacked-dict
+    train_loader_kwargs = {
+        "batch_size": min(training_batch_size, num_training_examples),
+        "drop_last": True,
+        "sampler": torch.utils.data.SubsetRandomSampler(train_indices.tolist()),
+    }
+    val_loader_kwargs = {
+        "batch_size": min(training_batch_size, num_validation_examples),
+        "shuffle": False,
+        "drop_last": True,
+        "sampler": torch.utils.data.SubsetRandomSampler(val_indices.tolist()),
+    }
+    if dataloader_kwargs is not None:
+        train_loader_kwargs = dict(train_loader_kwargs, **dataloader_kwargs)
+        val_loader_kwargs = dict(val_loader_kwargs, **dataloader_kwargs)
+
+    train_loader = torch.utils.data.DataLoader(dataset, **train_loader_kwargs)
+    val_loader = torch.utils.data.DataLoader(dataset, **val_loader_kwargs)
+
+    return train_loader, val_loader
 
 
 if __name__ == "__main__":

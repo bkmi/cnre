@@ -53,7 +53,6 @@ def main(cfg: DictConfig) -> None:
         torch.set_num_interop_threads(cfg.num_cores)
     log.info(f"num_threads: {torch.get_num_threads()}")
     log.info(f"num_interop_threads: {torch.get_num_interop_threads()}")
-    raise ValueError
 
     # Seeding
     torch.manual_seed(cfg.seed)

@@ -46,6 +46,15 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Random seed: {cfg.seed}")
     save_config(cfg)
 
+    # Threading
+    if cfg.num_cores is not None:
+        log.info(f"Setting num_threads and num_interop_threads to {cfg.num_cores}")
+        torch.set_num_threads(cfg.num_cores)
+        torch.set_num_interop_threads(cfg.num_cores)
+    log.info(f"num_threads: {torch.get_num_threads()}")
+    log.info(f"num_interop_threads: {torch.get_num_interop_threads()}")
+    raise ValueError
+
     # Seeding
     torch.manual_seed(cfg.seed)
     random.seed(cfg.seed)

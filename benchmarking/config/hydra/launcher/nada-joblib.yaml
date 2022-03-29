@@ -1,0 +1,5 @@
+defaults:
+  - joblib
+
+n_jobs: 2
+timeout: null

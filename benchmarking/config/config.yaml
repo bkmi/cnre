@@ -10,5 +10,8 @@ defaults:
 # Device to use, set on per-algorithm basis
 device: ${algorithm.device}
 
+# get number of cores
+num_cores: ${hydra:launcher.cpus_per_task}
+
 # Seed
 seed: null

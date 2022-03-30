@@ -15,3 +15,6 @@ num_cores: ${hydra:launcher.cpus_per_task}
 
 # Seed
 seed: null
+
+# training samples
+training_samples_root: null

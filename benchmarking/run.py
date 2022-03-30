@@ -88,6 +88,7 @@ def main(cfg: DictConfig) -> None:
         num_observation=cfg.task.num_observation,
         num_samples=task.num_posterior_samples,
         num_simulations=cfg.task.num_simulations,
+        training_samples_root=cfg.training_samples_root,
         **algorithm_params,
     )
     runtime = time.time() - t0

@@ -5,6 +5,8 @@ params:
   num_rounds: 1
   neural_net: resnet
   hidden_features: 50
+  num_blocks: 2
+  use_batch_norm: true
   simulation_batch_size: 1000
   training_batch_size: 512
   num_atoms: 10

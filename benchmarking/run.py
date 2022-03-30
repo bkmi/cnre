@@ -116,7 +116,7 @@ def main(cfg: DictConfig) -> None:
         validation_losses = outputs[3]
     else:
         raise NotImplementedError
-    validation_losses = torch.tensor(outputs[3], dtype=torch.float32)
+    validation_losses = torch.tensor(validation_losses, dtype=torch.float32)
 
     save_tensor_to_csv(
         path_validation_losses, validation_losses, columns=["validation_loss"]

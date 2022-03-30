@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn
+import torch.nn.functional
 from sbi.inference.posteriors.mcmc_posterior import MCMCPosterior
 from sbi.inference.posteriors.rejection_posterior import RejectionPosterior
 from sbi.inference.potentials.ratio_based_potential import RatioBasedPotential
@@ -75,6 +76,7 @@ def loss_bce(
 
     # Binary cross entropy to learn the likelihood (AALR-specific)
     return torch.nn.BCELoss()(likelihood, labels)
+    # return torch.nn.functional.binary_cross_entropy_with_logits(logits, labels, reduction="none")
 
 
 def loss(
@@ -82,11 +84,14 @@ def loss(
     theta: torch.Tensor,
     x: torch.Tensor,
     num_atoms: int,
-    alpha: float,
+    gamma: float,
     reuse: bool,
     extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """num_atoms should include the always marginal draw, i.e. num_atoms = K + 1 with K possible jointly drawn samples and 1 marginal sample"""
+    """num_atoms should include the always marginal draw, i.e. num_atoms = K + 1 with K possible jointly drawn samples and 1 marginal sample
+
+    loss = 2 * loss_bce, due to the mean computation over more items in loss_bce
+    """
     assert num_atoms >= 2
     assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
     batch_size = theta.shape[0]
@@ -118,23 +123,25 @@ def loss(
     logits_joint = logits_joint[:, :-1]
 
     # To use logsumexp, we extend the denominator logits with logalpha
-    logalpha = (
-        torch.tensor(alpha, dtype=dtype, device=device).log().expand(batch_size, 1)
-    )
+    loggamma = torch.tensor(gamma, dtype=dtype, device=device).log()
+    logK = torch.tensor(num_atoms - 1, dtype=dtype, device=device).log()
     denominator_marginal = torch.concat(
-        [logits_marginal, logalpha],
+        [loggamma + logits_marginal, logK.expand((batch_size, 1))],
         dim=-1,
     )
     denominator_joint = torch.concat(
-        [logits_joint, logalpha],
+        [loggamma + logits_joint, logK.expand((batch_size, 1))],
         dim=-1,
     )
 
     # Index 0 is the theta-x-pair sampled from the joint p(theta,x) and hence the
     # "correct" one for the 1-out-of-N classification.
-    log_prob_marginal = -torch.logsumexp(denominator_marginal, dim=-1)
-    log_prob_joint = logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
+    log_prob_marginal = logK - torch.logsumexp(denominator_marginal, dim=-1)
+    log_prob_joint = (
+        loggamma + logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
+    )
     return -torch.mean(log_prob_marginal + (num_atoms - 1) * log_prob_joint)
+    # return -(log_prob_marginal + (num_atoms - 1) * log_prob_joint)
 
 
 class Parabola(object):

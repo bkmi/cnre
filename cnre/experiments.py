@@ -9,6 +9,7 @@ from sbi.inference.posteriors.rejection_posterior import RejectionPosterior
 from sbi.inference.potentials.ratio_based_potential import RatioBasedPotential
 from sbi.utils import mcmc_transform, repeat_rows
 from torch.distributions import Distribution
+from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import trange
 
 
@@ -122,7 +123,7 @@ def loss(
     # ... and retain it in the logits_joint.
     logits_joint = logits_joint[:, :-1]
 
-    # To use logsumexp, we extend the denominator logits with logalpha
+    # To use logsumexp, we extend the denominator logits with loggamma
     loggamma = torch.tensor(gamma, dtype=dtype, device=device).log()
     logK = torch.tensor(num_atoms - 1, dtype=dtype, device=device).log()
     denominator_marginal = torch.concat(
@@ -140,8 +141,11 @@ def loss(
     log_prob_joint = (
         loggamma + logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
     )
-    return -torch.mean(log_prob_marginal + (num_atoms - 1) * log_prob_joint)
-    # return -(log_prob_marginal + (num_atoms - 1) * log_prob_joint)
+
+    # relative weights
+    pm, pj = get_pmarginal_pjoint(num_atoms, gamma)
+    return -torch.mean(pm * log_prob_marginal + pj * logK.exp() * log_prob_joint)
+    # return -(pm * log_prob_marginal + pj * logK.exp() * log_prob_joint)
 
 
 class Parabola(object):
@@ -172,10 +176,13 @@ class Gaussian(object):
         return torch.distributions.Normal(self.g(theta), self.scale).sample()
 
 
-def get_prior_marginal_to_joint_ratio(num_atoms: int) -> float:
-    """let the marginal class be 50% likely and the joint class to be equally likely across num_atoms."""
-    assert num_atoms >= 1.0
-    return 0.5 + (0.5 / (num_atoms - 1))
+def get_pmarginal_pjoint(num_atoms: int, gamma: float) -> float:
+    """let the joint class to be equally likely across num_atoms."""
+    assert num_atoms >= 2
+    K = num_atoms - 1
+    p_joint = gamma / (1 + gamma * K)
+    p_marginal = 1 / (1 + gamma * K)
+    return p_marginal, p_joint
 
 
 def train(
@@ -184,8 +191,9 @@ def train(
     epochs: int,
     train_loader,
     val_loader,
+    clip_max_norm: Optional[float] = 5.0,
     num_atoms: int = 2,
-    alpha: float = 1.0,
+    gamma: float = 1.0,
     reuse: bool = True,
 ):
     best_network_state_dict = None
@@ -196,10 +204,16 @@ def train(
     for epoch in trange(epochs, leave=False):
         # Training
         classifier.train()
+        optimizer.zero_grad()
         train_loss = 0
         for theta, x in train_loader:
-            _loss = loss(classifier, theta, x, num_atoms, alpha=alpha, reuse=reuse)
+            _loss = loss(classifier, theta, x, num_atoms, gamma=gamma, reuse=reuse)
             _loss.backward()
+            if clip_max_norm is not None:
+                clip_grad_norm_(
+                    classifier.parameters(),
+                    max_norm=clip_max_norm,
+                )
             optimizer.step()
             train_loss += _loss.detach().cpu().mean().numpy()
         train_losses.append(train_loss / len(train_loader))
@@ -209,12 +223,17 @@ def train(
         with torch.no_grad():
             valid_loss = 0
             for theta, x in val_loader:
-                _loss = loss(classifier, theta, x, num_atoms, alpha=alpha, reuse=reuse)
+                _loss = loss(classifier, theta, x, num_atoms, gamma=gamma, reuse=reuse)
                 valid_loss += _loss.detach().cpu().mean().numpy()
             valid_losses.append(valid_loss / len(val_loader))
             if epoch == 0 or min_loss > valid_loss:
                 min_loss = valid_loss
                 best_network_state_dict = deepcopy(classifier.state_dict())
+
+    # Avoid keeping the gradients in the resulting network, which can
+    # cause memory leakage when benchmarking.
+    classifier.zero_grad(set_to_none=True)
+
     return dict(
         train_losses=train_losses,
         valid_losses=valid_losses,

@@ -4,13 +4,10 @@ import random
 import socket
 import sys
 import time
-from pathlib import Path
 
 import hydra
 import numpy as np
-import pandas as pd
 import sbi
-import sbi.analysis as analysis
 import sbibm
 import scipy
 import scipy.integrate
@@ -18,16 +15,10 @@ import scipy.stats
 import torch
 import torch.distributions
 import yaml
+from metrics import compute_metrics_df
 from omegaconf import DictConfig, OmegaConf
-from sbi.inference import prepare_for_sbi
-from sbi.utils.get_nn_models import classifier_nn
 from sbibm.utils.debug import pdb_hook
-from sbibm.utils.io import (
-    get_float_from_csv,
-    get_tensor_from_csv,
-    save_float_to_csv,
-    save_tensor_to_csv,
-)
+from sbibm.utils.io import save_float_to_csv, save_tensor_to_csv
 
 import cnre
 
@@ -171,109 +162,6 @@ def save_config(cfg: DictConfig, filename: str = "run.yaml") -> None:
         yaml.dump(
             OmegaConf.to_container(cfg, resolve=True), fh, default_flow_style=False
         )
-
-
-def compute_metrics_df(
-    task_name: str,
-    num_observation: int,
-    path_samples: str,
-    path_runtime: str,
-    path_predictive_samples: str,
-    path_log_prob_true_parameters: str,
-    log: logging.Logger = logging.getLogger(__name__),
-) -> pd.DataFrame:
-    """Compute all metrics, returns dataframe
-
-    Args:
-        task_name: Task
-        num_observation: Observation
-        path_samples: Path to posterior samples
-        path_runtime: Path to runtime file
-        path_predictive_samples: Path to predictive samples
-        path_log_prob_true_parameters: Path to NLTP
-        log: Logger
-
-    Returns:
-        Dataframe with results
-    """
-    log.info(f"Compute all metrics")
-
-    # Load task
-    task = sbibm.get_task(task_name)
-
-    # Load samples
-    reference_posterior_samples = task.get_reference_posterior_samples(num_observation)[
-        : task.num_posterior_samples, :
-    ]
-    algorithm_posterior_samples = get_tensor_from_csv(path_samples)[
-        : task.num_posterior_samples, :
-    ]
-    assert reference_posterior_samples.shape[0] == task.num_posterior_samples
-    assert algorithm_posterior_samples.shape[0] == task.num_posterior_samples
-    log.info(
-        f"Loaded {task.num_posterior_samples} samples from reference and algorithm"
-    )
-
-    # Load posterior predictive samples
-    predictive_samples = get_tensor_from_csv(path_predictive_samples)[
-        : task.num_posterior_samples, :
-    ]
-    assert predictive_samples.shape[0] == task.num_posterior_samples
-
-    # Load observation
-    observation = task.get_observation(num_observation=num_observation)  # noqa
-
-    # Get runtime info
-    runtime_sec = torch.tensor(get_float_from_csv(path_runtime))  # noqa
-
-    # Get log prob true parameters
-    log_prob_true_parameters = torch.tensor(
-        get_float_from_csv(path_log_prob_true_parameters)
-    )  # noqa
-
-    # Names of all metrics as keys, values are calls that are passed to eval
-    # NOTE: Originally, we computed a large number of metrics, as reflected in the
-    # dictionary below. Ultimately, we used 10k samples and z-scoring for C2ST but
-    # not for MMD. If you were to adapt this code for your own pipeline of experiments,
-    # the entries for C2ST_Z, MMD and RT would probably suffice (and save compute).
-    _METRICS_ = {
-        #
-        # 10k samples
-        #
-        "C2ST": "metrics.c2st(X=reference_posterior_samples, Y=algorithm_posterior_samples, z_score=False)",
-        "C2ST_Z": "metrics.c2st(X=reference_posterior_samples, Y=algorithm_posterior_samples, z_score=True)",
-        "MMD": "metrics.mmd(X=reference_posterior_samples, Y=algorithm_posterior_samples, z_score=False)",
-        "MMD_Z": "metrics.mmd(X=reference_posterior_samples, Y=algorithm_posterior_samples, z_score=True)",
-        # "KSD_GAUSS": "metrics.ksd(task=task, num_observation=num_observation, samples=algorithm_posterior_samples, sig2=float(torch.median(torch.pdist(reference_posterior_samples))**2), log=False)",
-        "MEDDIST": "metrics.median_distance(predictive_samples, observation)",
-        #
-        # 1K samples
-        #
-        # "C2ST_1K": "metrics.c2st(X=reference_posterior_samples[:1000,:], Y=algorithm_posterior_samples[:1000,:], z_score=False)",
-        # "C2ST_1K_Z": "metrics.c2st(X=reference_posterior_samples[:1000,:], Y=algorithm_posterior_samples[:1000, :], z_score=True)",
-        # "MMD_1K": "metrics.mmd(X=reference_posterior_samples[:1000,:], Y=algorithm_posterior_samples[:1000, :], z_score=False)",
-        # "MMD_1K_Z": "metrics.mmd(X=reference_posterior_samples[:1000,:], Y=algorithm_posterior_samples[:1000, :], z_score=True)",
-        # "KSD_GAUSS_1K": "metrics.ksd(task=task, num_observation=num_observation, samples=algorithm_posterior_samples[:1000, :], sig2=float(torch.median(torch.pdist(reference_posterior_samples))**2), log=False)",
-        # "MEDDIST_1K": "metrics.median_distance(predictive_samples[:1000,:], observation)",
-        #
-        # Not based on samples
-        #
-        "NLTP": "-1. * log_prob_true_parameters",
-        "RT": "runtime_sec",
-    }
-
-    import sbibm.metrics as metrics  # noqa
-
-    metrics_dict = {}
-    for metric, eval_cmd in _METRICS_.items():
-        log.info(f"Computing {metric}")
-        try:
-            metrics_dict[metric] = eval(eval_cmd).cpu().numpy().astype(np.float32)
-            log.info(f"{metric}: {metrics_dict[metric]}")
-        except:
-            metrics_dict[metric] = float("nan")
-
-    return pd.DataFrame(metrics_dict)
 
 
 def cli():

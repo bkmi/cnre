@@ -66,9 +66,16 @@ def compile_df(
             row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
 
         try:
-            row["gamma"] = cfg["algorithm"]["gamma"]
+            row["gamma"] = cfg["algorithm"]["params"]["gamma"]
         except KeyError:
             row["gamma"] = float("nan")
+
+        if cfg["training_samples_root"] is not None:
+            row["training_samples_root"] = "/".join(
+                cfg["training_samples_root"].split("/")[-3:-1]
+            )
+        else:
+            row["training_samples_root"] = ""
 
         # Metrics df
         if path_metrics.exists():

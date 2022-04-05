@@ -23,6 +23,7 @@ def compute_metrics_df(
     path_runtime: str,
     path_predictive_samples: str,
     path_log_prob_true_parameters: str,
+    path_avg_log_ratio: str,
     log: logging.Logger = logging.getLogger(__name__),
 ) -> pd.DataFrame:
     """Compute all metrics, returns dataframe
@@ -34,6 +35,7 @@ def compute_metrics_df(
         path_runtime: Path to runtime file
         path_predictive_samples: Path to predictive samples
         path_log_prob_true_parameters: Path to NLTP
+        path_avg_log_ratio
         log: Logger
 
     Returns:
@@ -74,6 +76,8 @@ def compute_metrics_df(
         get_float_from_csv(path_log_prob_true_parameters)
     )  # noqa
 
+    avg_log_ratio = torch.tensor(get_float_from_csv(path_avg_log_ratio))
+
     # Names of all metrics as keys, values are calls that are passed to eval
     # NOTE: Originally, we computed a large number of metrics, as reflected in the
     # dictionary below. Ultimately, we used 10k samples and z-scoring for C2ST but
@@ -102,6 +106,7 @@ def compute_metrics_df(
         # Not based on samples
         #
         "NLTP": "-1. * log_prob_true_parameters",
+        "AVG_LOG_RATIO": "avg_log_ratio",
         "RT": "runtime_sec",
     }
 

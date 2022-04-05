@@ -65,6 +65,7 @@ def main(cfg: DictConfig) -> None:
     path_num_simulations_simulator = "num_simulations_simulator.csv"
     path_predictive_samples = "predictive_samples.csv.bz2"
     path_validation_losses = "validation_losses.csv.bz2"
+    path_avg_log_ratio = "avg_log_ratio.csv"
 
     # Run
     task = sbibm.get_task(cfg.task.name)
@@ -91,20 +92,23 @@ def main(cfg: DictConfig) -> None:
         num_simulations_simulator = float("nan")
         log_prob_true_parameters = float("nan")
         validation_losses = [float("nan")]
-    elif type(outputs) == tuple and len(outputs) == 3:
-        samples = outputs[0]
-        num_simulations_simulator = float(outputs[1])
-        log_prob_true_parameters = (
-            float(outputs[2]) if outputs[2] is not None else float("nan")
-        )
-        validation_losses = [float("nan")]
+        avg_log_ratio = float("nan")
     elif type(outputs) == tuple and len(outputs) == 4:
         samples = outputs[0]
         num_simulations_simulator = float(outputs[1])
         log_prob_true_parameters = (
             float(outputs[2]) if outputs[2] is not None else float("nan")
         )
+        validation_losses = [float("nan")]
+        avg_log_ratio = outputs[3]
+    elif type(outputs) == tuple and len(outputs) == 5:
+        samples = outputs[0]
+        num_simulations_simulator = float(outputs[1])
+        log_prob_true_parameters = (
+            float(outputs[2]) if outputs[2] is not None else float("nan")
+        )
         validation_losses = outputs[3]
+        avg_log_ratio = outputs[4]
     else:
         raise NotImplementedError
     validation_losses = torch.tensor(validation_losses, dtype=torch.float32)
@@ -113,6 +117,7 @@ def main(cfg: DictConfig) -> None:
         path_validation_losses, validation_losses, columns=["validation_loss"]
     )
     save_tensor_to_csv(path_samples, samples, columns=task.get_labels_parameters())
+    save_float_to_csv(path_avg_log_ratio, avg_log_ratio)
     save_float_to_csv(path_runtime, runtime)
     save_float_to_csv(path_num_simulations_simulator, num_simulations_simulator)
     save_float_to_csv(path_log_prob_true_parameters, log_prob_true_parameters)
@@ -145,6 +150,7 @@ def main(cfg: DictConfig) -> None:
             path_runtime=path_runtime,
             path_predictive_samples=path_predictive_samples,
             path_log_prob_true_parameters=path_log_prob_true_parameters,
+            path_avg_log_ratio=path_avg_log_ratio,
             log=log,
         )
         df_metrics.to_csv("metrics.csv", index=False)

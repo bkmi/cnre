@@ -148,6 +148,18 @@ def loss(
     # return -(pm * log_prob_marginal + pj * logK.exp() * log_prob_joint)
 
 
+def expected_log_ratio(
+    loader,
+    classifier,
+):
+    avg_log_ratio = 0
+    for theta, x in loader:
+        log_ratio = classifier([theta, x])
+        _avg_log_ratio = log_ratio.mean()
+        avg_log_ratio += _avg_log_ratio.cpu().item()
+    return avg_log_ratio / len(loader)
+
+
 class Parabola(object):
     def __init__(self, scale: float) -> None:
         self.scale = scale

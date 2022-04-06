@@ -70,6 +70,11 @@ def compile_df(
         except KeyError:
             row["gamma"] = float("nan")
 
+        try:
+            row["extra_theta_factor"] = cfg["algorithm"]["params"]["extra_theta_factor"]
+        except KeyError:
+            row["extra_theta_factor"] = 0
+
         if cfg["training_samples_root"] is not None:
             row["training_samples_root"] = "/".join(
                 cfg["training_samples_root"].split("/")[-3:-1]

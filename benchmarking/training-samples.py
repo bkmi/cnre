@@ -17,7 +17,13 @@ if __name__ == "__main__":
         ],
     )
     parser.add_argument("--num_simulations", type=int, default=100_000)
+    parser.add_argument("--extra_theta_factor", type=int, default=0)
     args = parser.parse_args()
 
     for task in args.tasks:
-        create_training_samples(task, args.num_simulations, args.root)
+        create_training_samples(
+            task_name=task,
+            num_simulations=args.num_simulations,
+            training_samples_root=args.root,
+            extra_theta_factor=args.extra_theta_factor,
+        )

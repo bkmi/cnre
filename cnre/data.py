@@ -21,6 +21,7 @@ def create_training_samples(
     num_simulations: int,
     training_samples_root: str,
     simulation_batch_size: int = 5_000,
+    extra_theta_factor: int = 0,
 ):
     task = sbibm.get_task(task_name)
     prior = task.get_prior_dist()
@@ -38,6 +39,8 @@ def create_training_samples(
         simulation_batch_size=simulation_batch_size,
     )
 
+    extra_theta = prior.sample((extra_theta_factor * num_simulations,))
+    theta = torch.concat([theta, extra_theta], dim=0)
     save_tensor_to_csv(theta_path, theta)
     save_tensor_to_csv(x_path, x)
     return None

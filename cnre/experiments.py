@@ -10,6 +10,7 @@ from sbi.inference.potentials.ratio_based_potential import RatioBasedPotential
 from sbi.utils import mcmc_transform, repeat_rows
 from torch.distributions import Distribution
 from torch.nn.utils.clip_grad import clip_grad_norm_
+from torch.utils.data.dataloader import DataLoader
 from tqdm import trange
 
 
@@ -197,12 +198,32 @@ def get_pmarginal_pjoint(num_atoms: int, gamma: float) -> float:
     return p_marginal, p_joint
 
 
+def iterate_over_two_dataloaders(
+    dl_small: DataLoader, dl_large: Optional[DataLoader]
+) -> Tuple:
+    if dl_large is None:
+        for data_small in dl_small:
+            yield data_small, None
+    else:
+        assert len(dl_small) <= len(dl_large)
+        dl_iterator_small = iter(dl_small)
+        for data_large in dl_large:
+            try:
+                data_small = next(dl_iterator_small)
+            except StopIteration:
+                dl_iterator_small = iter(dl_small)
+                data_small = next(dl_iterator_small)
+            yield data_small, data_large
+
+
 def train(
     classifier: torch.nn.Module,
     optimizer,
     epochs: int,
-    train_loader,
-    val_loader,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    extra_train_loader: Optional[DataLoader] = None,
+    extra_val_loader: Optional[DataLoader] = None,
     clip_max_norm: Optional[float] = 5.0,
     num_atoms: int = 2,
     gamma: float = 1.0,
@@ -218,8 +239,18 @@ def train(
         classifier.train()
         optimizer.zero_grad()
         train_loss = 0
-        for theta, x in train_loader:
-            _loss = loss(classifier, theta, x, num_atoms, gamma=gamma, reuse=reuse)
+        for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
+            train_loader, extra_train_loader
+        ):
+            _loss = loss(
+                classifier,
+                theta,
+                x,
+                num_atoms,
+                gamma=gamma,
+                reuse=reuse,
+                extra_theta=extra_theta,
+            )
             _loss.backward()
             if clip_max_norm is not None:
                 clip_grad_norm_(
@@ -234,8 +265,18 @@ def train(
         classifier.eval()
         with torch.no_grad():
             valid_loss = 0
-            for theta, x in val_loader:
-                _loss = loss(classifier, theta, x, num_atoms, gamma=gamma, reuse=reuse)
+            for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
+                val_loader, extra_val_loader
+            ):
+                _loss = loss(
+                    classifier,
+                    theta,
+                    x,
+                    num_atoms,
+                    gamma=gamma,
+                    reuse=reuse,
+                    extra_theta=extra_theta,
+                )
                 valid_loss += _loss.detach().cpu().mean().numpy()
             valid_losses.append(valid_loss / len(val_loader))
             if epoch == 0 or min_loss > valid_loss:

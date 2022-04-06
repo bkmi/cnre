@@ -23,4 +23,5 @@ params:
   z_score_x: independent
   z_score_theta: independent
   max_num_epochs: ???
+  extra_theta_factor: 0
   gamma: 1.0

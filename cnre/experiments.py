@@ -203,7 +203,7 @@ def iterate_over_two_dataloaders(
 ) -> Tuple:
     if dl_large is None:
         for data_small in dl_small:
-            yield data_small, None
+            yield data_small, [None]
     else:
         assert len(dl_small) <= len(dl_large)
         dl_iterator_small = iter(dl_small)

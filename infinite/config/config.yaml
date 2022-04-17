@@ -1,0 +1,21 @@
+# Whether to compute metrics after run or not
+compute_metrics: true
+
+# Hydra's overrides are used to change to different tasks and algorithms
+defaults:
+  - algorithm: cnre
+  - task: two_moons
+  - _self_
+
+# Device to use, set on per-algorithm basis
+device: ${algorithm.device}
+
+# get number of cores
+num_cores: ${hydra:launcher.cpus_per_task}
+
+# Seed
+seed: null
+
+# define how long to go
+max_num_epochs: ???
+max_steps_per_epoch: ???

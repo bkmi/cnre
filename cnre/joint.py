@@ -44,6 +44,7 @@ def get_endless_train_loader_and_new_valid_loader(
     train_loader = DataLoader(dataset, **train_loader_kwargs)
     for theta, _ in train_loader:
         training_batch_size = theta.size(0)
+        break
 
     niters = ceil(num_validation_examples / training_batch_size)
     assert niters >= 0

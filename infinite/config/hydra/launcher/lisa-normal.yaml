@@ -1,0 +1,5 @@
+defaults:
+  - submitit_slurm
+
+timeout_min: 60
+partition: normal

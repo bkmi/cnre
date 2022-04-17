@@ -228,10 +228,19 @@ def train(
     num_atoms: int = 2,
     gamma: float = 1.0,
     reuse: bool = True,
+    max_steps_per_epoch: Optional[int] = None,
+    state_dict_saving_rate: Optional[int] = None,
 ):
     best_network_state_dict = None
     min_loss = float("-Inf")
 
+    # catch infinite training loaders
+    try:
+        num_training_steps = min(max_steps_per_epoch, len(train_loader))
+    except TypeError:
+        num_training_steps = max_steps_per_epoch
+
+    state_dicts = {}
     train_losses = []
     valid_losses = []
     for epoch in trange(epochs, leave=False):
@@ -239,8 +248,8 @@ def train(
         classifier.train()
         optimizer.zero_grad()
         train_loss = 0
-        for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
-            train_loader, extra_train_loader
+        for i, ((theta, x), (extra_theta,)) in enumerate(
+            iterate_over_two_dataloaders(train_loader, extra_train_loader)
         ):
             _loss = loss(
                 classifier,
@@ -259,10 +268,13 @@ def train(
                 )
             optimizer.step()
             train_loss += _loss.detach().cpu().mean().numpy()
-        train_losses.append(train_loss / len(train_loader))
+            if i >= max_steps_per_epoch:
+                break
+        train_losses.append(train_loss / num_training_steps)
 
         # Evaluation
         classifier.eval()
+        optimizer.zero_grad()
         with torch.no_grad():
             valid_loss = 0
             for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
@@ -282,6 +294,11 @@ def train(
             if epoch == 0 or min_loss > valid_loss:
                 min_loss = valid_loss
                 best_network_state_dict = deepcopy(classifier.state_dict())
+            if (
+                state_dict_saving_rate is not None
+                and epoch % state_dict_saving_rate == 0
+            ):
+                state_dicts[epoch] = deepcopy(classifier.state_dict())
 
     # Avoid keeping the gradients in the resulting network, which can
     # cause memory leakage when benchmarking.
@@ -292,6 +309,7 @@ def train(
         valid_losses=valid_losses,
         best_network_state_dict=best_network_state_dict,
         last_state_dict=deepcopy(classifier.state_dict()),
+        state_dicts=state_dicts,
     )
 
 

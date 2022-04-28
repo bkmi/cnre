@@ -105,10 +105,12 @@ def main(cfg: DictConfig) -> None:
     path_posterior_samples_root = Path("posterior_samples")
     path_log_prob_true_parameters_root = Path("log_prob_true_parameters")
     path_predictive_samples_root = Path("predictive_samples")
+    path_state_dicts_root = Path("state_dicts")
 
     path_posterior_samples_root.mkdir()
     path_log_prob_true_parameters_root.mkdir()
     path_predictive_samples_root.mkdir()
+    path_state_dicts_root.mkdir()
 
     save_tensor_to_csv(
         path_validation_loss,
@@ -126,6 +128,8 @@ def main(cfg: DictConfig) -> None:
         )
     for i, log_prob in enumerate(output.log_prob_true_parameters, start=1):
         save_float_to_csv(path_log_prob_true_parameters_root / f"{i:02d}.csv", log_prob)
+    for epoch, state_dict in output.state_dicts.items():
+        torch.save(state_dict, path_state_dicts_root / f"{epoch:04d}.pt")
 
     # Predictive samples
     log.info("Draw posterior predictive samples")

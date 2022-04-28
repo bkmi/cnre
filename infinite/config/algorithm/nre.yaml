@@ -1,13 +1,13 @@
 name: NRE
-run: runfuncs.run_cnre
+run: runfuncs.run_nre
 device: cpu
 params:
+  learning_rate: 5e-4
   neural_net: resnet
   hidden_features: 50
   num_blocks: 2
   use_batch_norm: true
-  simulation_batch_size: 1000
-  training_batch_size: 512
+  training_batch_size: 1_024
   num_atoms: 10
   automatic_transforms_enabled: true
   sample_with: rejection
@@ -20,6 +20,6 @@ params:
     sir_num_batches: 100
   z_score_x: independent
   z_score_theta: independent
-  num_validation_examples: 1_024
-  stop_after_epochs: 2147483647
+  state_dict_saving_rate: null
+  num_validation_examples: 2_048
   variant: B

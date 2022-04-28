@@ -1,0 +1,7 @@
+defaults:
+  - submitit_slurm
+
+timeout_min: 60
+cpus_per_task: 8
+nodes: 1
+constraint: cpunode

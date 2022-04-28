@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import hydra
 import numpy as np
@@ -173,22 +173,20 @@ def run_cnre(
 class SNRE_B_INF(inference.SNRE_B):
     def train(
         self,
-        get_optimizer,
+        max_steps_per_epoch: int,
         train_loader,
         val_loader,
+        get_optimizer: Callable,
         num_atoms: int = 10,
         training_batch_size: int = 50,
         learning_rate: float = 5e-4,
-        validation_fraction: float = 0.1,
         stop_after_epochs: int = 20,
         max_num_epochs: int = 2**31 - 1,
         clip_max_norm: Optional[float] = 5.0,
-        exclude_invalid_x: bool = True,
-        resume_training: bool = False,
-        discard_prior_samples: bool = False,
         show_train_summary: bool = False,
-        dataloader_kwargs: Optional[Dict] = None,
+        state_dict_saving_rate: int = 100,
     ) -> nn.Module:
+        self._state_dicts = {}
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -205,7 +203,7 @@ class SNRE_B_INF(inference.SNRE_B):
             self._neural_net = self._build_neural_net(theta, x)
             self._x_shape = x_shape_from_simulation(x)
         self._neural_net.to(self._device)
-        self.optimizer = get_optimizer(self._neural_net)
+        self.optimizer = get_optimizer(self._neural_net.parameters(), lr=learning_rate)
         self.epoch, self._val_log_prob = 0, float("-Inf")
 
         while self.epoch <= max_num_epochs and not self._converged(
@@ -215,6 +213,7 @@ class SNRE_B_INF(inference.SNRE_B):
             # Train for a single epoch.
             self._neural_net.train()
             train_log_probs_sum = 0
+            counter = 0
             for batch in train_loader:
                 self.optimizer.zero_grad()
                 theta_batch, x_batch = (
@@ -233,11 +232,14 @@ class SNRE_B_INF(inference.SNRE_B):
                         max_norm=clip_max_norm,
                     )
                 self.optimizer.step()
+                counter += 1
+                if counter >= max_steps_per_epoch:
+                    break
 
             self.epoch += 1
 
             train_log_prob_average = train_log_probs_sum / (
-                len(train_loader) * train_loader.batch_size  # type: ignore
+                max_steps_per_epoch * clipped_batch_size  # type: ignore
             )
             self._summary["train_log_probs"].append(train_log_prob_average)
 
@@ -252,12 +254,19 @@ class SNRE_B_INF(inference.SNRE_B):
                     )
                     val_losses = self._loss(theta_batch, x_batch, num_atoms)
                     val_log_prob_sum -= val_losses.sum().item()
-                # Take mean over all validation samples.
                 self._val_log_prob = val_log_prob_sum / (
-                    len(val_loader) * val_loader.batch_size  # type: ignore
+                    len(val_loader) * clipped_batch_size  # type: ignore
                 )
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
+
+                if (
+                    state_dict_saving_rate is not None
+                    and self.epoch % state_dict_saving_rate == 0
+                ):
+                    self._state_dicts[self.epoch] = deepcopy(
+                        self._neural_net.state_dict()
+                    )
 
             self._maybe_show_progress(self._show_progress_bars, self.epoch)
 
@@ -404,58 +413,57 @@ def run_nre(
         num_validation_examples,
     )
 
-    get_optimizer = lambda cl: torch.optim.Adam(cl.parameters(), lr=learning_rate)
-
     for r in range(num_rounds):
         density_estimator = inference_method.train(
-            get_optimizer,
+            max_steps_per_epoch,
             train_loader,
             val_loader=valid_loader,
+            get_optimizer=torch.optim.Adam,
             training_batch_size=training_batch_size,
+            learning_rate=learning_rate,
             max_num_epochs=max_num_epochs,
             stop_after_epochs=2**30 - 1,
+            state_dict_saving_rate=state_dict_saving_rate,
             **inference_method_kwargs,
         )
         # if r > 1:
         #     mcmc_parameters["init_strategy"] = "latest_sample"
 
-        posterior = inference_method.build_posterior(
-            density_estimator,
-            sample_with=sample_with,
-            mcmc_method=mcmc_method,
-            mcmc_parameters=mcmc_parameters,
-            enable_transform=False,  # NOTE: Disable `sbi` auto-transforms, since `sbibm` does its own
-        )
-        # Copy hyperparameters, e.g., mcmc_init_samples for "latest_sample" strategy.
-        # if r > 0:
-        #     posterior.copy_hyperparameters_from(posteriors[-1])
-        # proposal = posterior.set_default_x(observation)
-        # posteriors.append(posterior)
+    density_estimator.load_state_dict(inference_method._best_model_state_dict)
 
-    posterior = wrap_posterior(posteriors[-1], transforms)
+    avg_log_ratio = cnre.expected_log_ratio(valid_loader, density_estimator)
 
-    samples = posterior.sample((num_samples,)).detach()
-
-    theta, x, _ = inference_method.get_simulations()
-    dataset = torch.utils.data.TensorDataset(theta, x)
-    _, valid_loader = inference_method.get_dataloaders(
-        dataset,
-        training_batch_size,
-        validation_fraction=0.1,
-        resume_training=True,
+    posterior = inference_method.build_posterior(
+        density_estimator,
+        sample_with=sample_with,
+        mcmc_method=mcmc_method,
+        mcmc_parameters=mcmc_parameters,
+        enable_transform=False,  # NOTE: Disable `sbi` auto-transforms, since `sbibm` does its own
     )
+    # Copy hyperparameters, e.g., mcmc_init_samples for "latest_sample" strategy.
+    # if r > 0:
+    #     posterior.copy_hyperparameters_from(posteriors[-1])
+    # proposal = posterior.set_default_x(observation)
+    # posteriors.append(posterior)
 
-    avg_log_ratio = cnre.expected_log_ratio(valid_loader, inference_method._neural_net)
+    posterior = wrap_posterior(posterior, transforms)
+    observations = [
+        task.get_observation(num_observation) for num_observation in range(1, 11)
+    ]
+    samples = [
+        posterior.sample((num_samples,), x=observation).detach()
+        for observation in observations
+    ]
 
     return {
         "posterior_samples": samples,
         "num_simulations": simulator.num_simulations,
-        "validation_loss": results["valid_losses"],
+        "validation_loss": [
+            -i for i in inference_method._summary["validation_log_probs"]
+        ],
         "avg_log_ratio": avg_log_ratio,
-        "state_dicts": results["state_dicts"],
+        "state_dicts": inference_method._state_dicts,
     }
-
-    return samples, checked_num_simulations, None, avg_log_ratio
 
 
 if __name__ == "__main__":

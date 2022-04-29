@@ -236,9 +236,14 @@ def train(
 
     # catch infinite training loaders
     try:
-        num_training_steps = min(max_steps_per_epoch, len(train_loader))
+        len_train_loader = len(train_loader)
     except TypeError:
-        num_training_steps = max_steps_per_epoch
+        len_train_loader = float("Inf")
+
+    if max_steps_per_epoch is None:
+        max_steps_per_epoch = float("Inf")
+
+    num_training_steps = min(max_steps_per_epoch, len_train_loader)
 
     state_dicts = {}
     train_losses = []
@@ -268,7 +273,7 @@ def train(
                 )
             optimizer.step()
             train_loss += _loss.detach().cpu().mean().numpy()
-            if i >= max_steps_per_epoch:
+            if i >= num_training_steps:
                 break
         train_losses.append(train_loss / num_training_steps)
 

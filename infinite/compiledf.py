@@ -75,6 +75,11 @@ def compile_df(
         except KeyError:
             row["extra_theta_factor"] = 0
 
+        try:
+            row["reuse"] = cfg["algorithm"]["params"]["reuse"]
+        except KeyError:
+            row["extra_theta_factor"] = False
+
         row["hidden_features"] = cfg["algorithm"]["params"]["hidden_features"]
         row["num_blocks"] = cfg["algorithm"]["params"]["num_blocks"]
 

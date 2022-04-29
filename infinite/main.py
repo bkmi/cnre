@@ -71,10 +71,15 @@ def main(cfg: DictConfig) -> None:
     # Devices
     gpu = True if cfg.device != "cpu" else False
     if gpu:
-        torch.cuda.set_device(0)
+        try:
+            device_id = int(cfg.device[-1])
+        except:
+            device_id = 0
+        torch.cuda.set_device(device_id)
         torch.set_default_tensor_type(
             "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
         )
+    log.info(f"device is {torch.cuda.get_device_name()}")
 
     # Run
     task = sbibm.get_task(cfg.task.name)

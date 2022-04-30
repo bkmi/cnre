@@ -71,6 +71,7 @@ def main(cfg: DictConfig) -> None:
     # Devices
     gpu = True if cfg.device != "cpu" else False
     if gpu:
+        log.info(f"number of available gpus: {torch.cuda.device_count()}")
         try:
             device_id = int(cfg.device[-1])
         except:
@@ -79,7 +80,9 @@ def main(cfg: DictConfig) -> None:
         torch.set_default_tensor_type(
             "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
         )
-    log.info(f"device is {torch.cuda.get_device_name()}")
+    log.info(
+        f"using device {torch.cuda._get_device_index()} named {torch.cuda.get_device_name()}"
+    )
 
     # Run
     task = sbibm.get_task(cfg.task.name)

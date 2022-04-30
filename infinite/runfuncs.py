@@ -60,7 +60,7 @@ def run_cnre(
     max_num_epochs: Optional[int] = None,
     state_dict_saving_rate: Optional[int] = None,
     gamma: float = 1.0,
-    reuse: bool = True,
+    reuse: bool = False,
 ) -> Dict:
     """Runs infinite CNRE
 

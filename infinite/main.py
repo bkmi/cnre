@@ -159,6 +159,8 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Compute metrics
+    torch.set_default_tensor_type("torch.FloatTensor")
+
     if cfg.compute_metrics:
         df_metrics = compute_metrics_df(
             task_name=cfg.task.name,

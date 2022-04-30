@@ -83,7 +83,7 @@ def main(cfg: DictConfig) -> None:
             "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
         )
     log.info(
-        f"using device {torch.cuda._get_device_index()} named {torch.cuda.get_device_name()}"
+        f"using device {torch.device(device_id)} named {torch.cuda.get_device_name()}"
     )
 
     # Run

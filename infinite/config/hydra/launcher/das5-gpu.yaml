@@ -3,5 +3,9 @@ defaults:
 
 timeout_min: 60
 cpus_per_task: 8
+gpus_per_node: 1
 nodes: 1
-constraint: Titan,K20,RTX2080Ti,TitanX,TitanX-Pascal
+constraint: [Titan,K20,RTX2080Ti,TitanX,TitanX-Pascal]
+exclude: node029
+# constraint: gpunode
+# exclude: null

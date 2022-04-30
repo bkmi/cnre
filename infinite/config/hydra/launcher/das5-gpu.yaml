@@ -8,9 +8,8 @@ nodes: 1
 partition: defq
 constraint: TitanX
 exclude: null
-signal_delay_s: 120
-max_num_timeout: 0
-gres: gpu:${hydra.launcher.gpus_per_node}
-array_parallelism: 16
+additional_parameters:
+  gres: gpu:1
 setup:
-  - conda activate ./env
+  - module load cuda11.1/toolkit/11.1.1
+  - conda activate ~/data/cnre/env

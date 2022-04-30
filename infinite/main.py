@@ -1,5 +1,6 @@
 import importlib
 import logging
+import os
 import random
 import socket
 import sys
@@ -72,6 +73,7 @@ def main(cfg: DictConfig) -> None:
     gpu = True if cfg.device != "cpu" else False
     if gpu:
         log.info(f"number of available gpus: {torch.cuda.device_count()}")
+        log.info(f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']}")
         try:
             device_id = int(cfg.device[-1])
         except:

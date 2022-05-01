@@ -23,6 +23,7 @@ from sbibm.algorithms.sbi.utils import (
     wrap_simulator_fn,
 )
 from sbibm.tasks.task import Task
+from sbibm.utils.torch import get_default_device
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.utils import data
 from tqdm import tqdm
@@ -371,7 +372,6 @@ def run_nre(
     prior = task.get_prior_dist()
     # if observation is None:
     #     observation = task.get_observation(num_observation)
-
     simulator = task.get_simulator()
 
     transforms = task._get_transforms(automatic_transforms_enabled)["parameters"]
@@ -397,7 +397,14 @@ def run_nre(
     else:
         raise NotImplementedError
 
-    inference_method = inference_class(classifier=classifier, prior=prior)
+    device_string = (
+        f"{get_default_device().type}:{get_default_device().index}"
+        if get_default_device().type == "cuda"
+        else f"{get_default_device().type}"
+    )
+    inference_method = inference_class(
+        classifier=classifier, prior=prior, device=device_string
+    )
 
     posteriors = []
     proposal = prior

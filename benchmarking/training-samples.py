@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from cnre.data import create_training_samples
+from cnre.data.presampled import create_training_samples
 
 if __name__ == "__main__":
     parser = ArgumentParser()

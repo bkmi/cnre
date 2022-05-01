@@ -7,18 +7,16 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 import hydra
 import numpy as np
 import sbi
 import sbibm
-import scipy
-import scipy.integrate
-import scipy.stats
 import torch
 import torch.distributions
 import yaml
+from matplotlib.pyplot import isinteractive
 from metrics import compute_metrics_df
 from omegaconf import DictConfig, OmegaConf
 from sbi import inference as inference
@@ -26,8 +24,7 @@ from sbibm.utils.debug import pdb_hook
 from sbibm.utils.io import save_float_to_csv, save_tensor_to_csv
 
 import cnre
-import cnre.data
-import cnre.joint
+from cnre.algorithms.utils import AlgorithmOutput
 
 
 @dataclass
@@ -94,18 +91,20 @@ def main(cfg: DictConfig) -> None:
     run_fn = getattr(importlib.import_module(module_name), parts[-1])
     algorithm_params = cfg.algorithm.params if "params" in cfg.algorithm else {}
     log.info("Start run")
-    output = run_fn(
-        task,
-        num_samples=task.num_posterior_samples,
+    obj = run_fn(
+        task=task,
+        num_posterior_samples=task.num_posterior_samples,
         max_num_epochs=cfg.max_num_epochs,
         max_steps_per_epoch=cfg.max_steps_per_epoch,
         **algorithm_params,
     )
+    # TODO, make this consistent
+    if isinstance(obj, AlgorithmOutput):
+        output = obj
+    else:
+        output = obj.run()
     runtime = time.time() - t0
     log.info("Finished run")
-
-    # Process output
-    output = Output(**output)
 
     # Paths
     path_runtime = "runtime.csv"

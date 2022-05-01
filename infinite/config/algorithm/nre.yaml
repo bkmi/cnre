@@ -1,5 +1,5 @@
 name: NRE
-run: runfuncs.run_nre
+run: cnre.algorithms.nre.run_nre
 device: cpu
 params:
   learning_rate: 5e-4

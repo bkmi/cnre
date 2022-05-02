@@ -1,13 +1,10 @@
 import importlib
 import logging
-import os
 import random
 import socket
 import sys
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
 
 import hydra
 import numpy as np
@@ -16,7 +13,6 @@ import sbibm
 import torch
 import torch.distributions
 import yaml
-from matplotlib.pyplot import isinteractive
 from metrics import compute_metrics_df
 from omegaconf import DictConfig, OmegaConf
 from sbi import inference as inference
@@ -24,19 +20,6 @@ from sbibm.utils.debug import pdb_hook
 from sbibm.utils.io import save_float_to_csv, save_tensor_to_csv
 
 import cnre
-from cnre.algorithms.utils import AlgorithmOutput
-
-
-@dataclass
-class Output:
-    posterior_samples: List[torch.Tensor]
-    num_simulations: int
-    validation_loss: List[float] = field(default_factory=lambda: [float("nan")])
-    avg_log_ratio: float = field(default=float("nan"))
-    state_dicts: dict[int, dict] = field(default_factory=dict)
-    log_prob_true_parameters: List[float] = field(
-        default_factory=lambda: [float("nan")] * 10
-    )
 
 
 @hydra.main(config_path="config", config_name="config")

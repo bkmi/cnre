@@ -1,14 +1,17 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, Dict, Optional, Tuple
 
-import torch
 from sbi import inference
 from sbibm.algorithms.sbi.utils import wrap_posterior
 from sbibm.tasks.task import Task
 from torch.utils.data import DataLoader, TensorDataset
 
 from cnre.algorithms.base import AlgBase
-from cnre.algorithms.utils import AlgorithmOutput
+from cnre.algorithms.utils import (
+    AlgorithmOutput,
+    get_cheap_joint_dataloaders,
+    get_cheap_prior_dataloaders,
+)
 from cnre.data.joint import JointSampler, get_endless_train_loader_and_new_valid_loader
 from cnre.data.prior import PriorSampler
 from cnre.experiments import (
@@ -128,7 +131,7 @@ class CNREBase(AlgBase, ABC):
         )
 
 
-class CNREInfinite(CNREBase):
+class CNRECheapJoint(CNREBase):
     def __init__(
         self, max_steps_per_epoch: int, num_validation_examples: int, *args, **kwargs
     ) -> None:
@@ -136,15 +139,10 @@ class CNREInfinite(CNREBase):
         self.max_steps_per_epoch = max_steps_per_epoch
         self.num_validation_examples = num_validation_examples
 
-    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader, None, None]:
-        dataset = JointSampler(self.simulator, self.prior, self.training_batch_size)
-        (train_loader, valid_loader,) = get_endless_train_loader_and_new_valid_loader(
-            dataset,
-            self.num_validation_examples,
-        )
-        extra_train_loader = None
-        extra_val_loader = None
-        return train_loader, valid_loader, extra_train_loader, extra_val_loader
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        return get_cheap_joint_dataloaders(self)
 
     def train(
         self,
@@ -185,25 +183,10 @@ class CNRECheapPrior(CNREBase):
         self.simulation_batch_size = simulation_batch_size
         self.validation_fraction = validation_fraction
 
-    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader, DataLoader, DataLoader]:
-        theta, x = inference.simulate_for_sbi(
-            self.simulator,
-            self.prior,
-            num_simulations=self.num_simulations,
-            simulation_batch_size=self.simulation_batch_size,
-        )
-        dataset = TensorDataset(theta, x)
-        train_loader, valid_loader = get_dataloaders(
-            dataset, self.training_batch_size, self.validation_fraction
-        )
-
-        prior_sampler = PriorSampler(
-            self.prior, 2 * (self.num_atoms - 1) * self.training_batch_size
-        )
-        prior_sample_loader = DataLoader(
-            prior_sampler, batch_size=None, batch_sampler=None
-        )
-        return train_loader, valid_loader, prior_sample_loader, prior_sample_loader
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        return get_cheap_prior_dataloaders(self)
 
     def train(
         self,

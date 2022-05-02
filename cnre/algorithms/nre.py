@@ -21,7 +21,11 @@ from torch.utils.data.dataloader import DataLoader
 
 import cnre.data.joint
 from cnre.algorithms.base import AlgBase
-from cnre.algorithms.utils import AlgorithmOutput
+from cnre.algorithms.utils import (
+    AlgorithmOutput,
+    get_cheap_joint_dataloaders,
+    get_cheap_prior_dataloaders,
+)
 from cnre.experiments import expected_log_ratio
 
 
@@ -278,74 +282,22 @@ class NREBase(AlgBase, ABC):
         )
 
 
-class NREInfinite(NREBase):
+class NRECheapJoint(NREBase):
     def __init__(
         self,
-        task: Task,
-        num_posterior_samples: int,
-        max_num_epochs: int,
         max_steps_per_epoch: int,
         num_validation_examples: int,
-        learning_rate: float = 0.0005,
-        neural_net: str = "resnet",
-        hidden_features: int = 50,
-        num_blocks: int = 2,
-        use_batch_norm: bool = True,
-        training_batch_size: int = 10000,
-        num_atoms: int = 10,
-        automatic_transforms_enabled: bool = True,
-        sample_with: str = "mcmc",
-        mcmc_method: str = "slice_np_vectorized",
-        mcmc_parameters: Dict[str, Any] = {
-            "num_chains": 100,
-            "thin": 10,
-            "warmup_steps": 100,
-            "init_strategy": "sir",
-            "sir_batch_size": 1000,
-            "sir_num_batches": 100,
-        },
-        z_score_x: bool = True,
-        z_score_theta: bool = True,
-        state_dict_saving_rate: Optional[int] = None,
-        variant: str = "B",
+        *args,
+        **kwargs,
     ) -> None:
-        super().__init__(
-            task,
-            num_posterior_samples,
-            max_num_epochs,
-            learning_rate,
-            neural_net,
-            hidden_features,
-            num_blocks,
-            use_batch_norm,
-            training_batch_size,
-            num_atoms,
-            automatic_transforms_enabled,
-            sample_with,
-            mcmc_method,
-            mcmc_parameters,
-            z_score_x,
-            z_score_theta,
-            state_dict_saving_rate,
-            variant,
-        )
+        super().__init__(*args, **kwargs)
         self.max_steps_per_epoch = max_steps_per_epoch
         self.num_validation_examples = num_validation_examples
 
     def get_dataloaders(
         self,
     ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
-        dataset = cnre.data.joint.JointSampler(
-            self.simulator, self.prior, self.training_batch_size
-        )
-        (
-            train_loader,
-            valid_loader,
-        ) = cnre.data.joint.get_endless_train_loader_and_new_valid_loader(
-            dataset,
-            self.num_validation_examples,
-        )
-        return train_loader, valid_loader, None, None
+        return get_cheap_joint_dataloaders(self)
 
     def train(
         self,
@@ -353,7 +305,48 @@ class NREInfinite(NREBase):
         val_loader: DataLoader,
         *args,
         **kwargs,
-    ) -> Dict:
+    ) -> nn.Module:
+        return self.inference_method.train(
+            self.max_steps_per_epoch,
+            train_loader,
+            val_loader=val_loader,
+            get_optimizer=self.get_optimizer,
+            training_batch_size=self.training_batch_size,
+            learning_rate=self.learning_rate,
+            max_num_epochs=self.max_num_epochs,
+            stop_after_epochs=2**30 - 1,
+            state_dict_saving_rate=self.state_dict_saving_rate,
+            **self.inference_method_kwargs,
+        )
+
+
+class NRECheapPrior(NREBase):
+    def __init__(
+        self,
+        num_simulations: int,
+        simulation_batch_size: int,
+        validation_fraction: float,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.num_simulations = num_simulations
+        self.simulation_batch_size = simulation_batch_size
+        self.validation_fraction = validation_fraction
+
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        return get_cheap_prior_dataloaders(self)
+
+    def train(
+        self,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        extra_train_loader: DataLoader,
+        extra_val_loader: DataLoader,
+    ) -> nn.Module:
+        raise NotImplementedError()  # TODO
         return self.inference_method.train(
             self.max_steps_per_epoch,
             train_loader,

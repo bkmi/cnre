@@ -189,10 +189,14 @@ def loss_cheap_prior(
     batch_size = theta.shape[0]
     extra_batch_size = extra_theta.shape[0]
     logits_marginal = classifier_logits_cheap_prior(
-        classifier, theta, x, num_atoms, extra_theta[: extra_batch_size // 2]
+        classifier, theta, x, num_atoms, extra_theta
     )
     logits_joint = classifier_logits_cheap_prior(
-        classifier, theta, x, num_atoms, extra_theta[extra_batch_size // 2 :]
+        classifier,
+        theta,
+        x,
+        num_atoms,
+        extra_theta[torch.randperm(extra_batch_size), ...],
     )
     dtype = logits_marginal.dtype
     device = logits_marginal.device

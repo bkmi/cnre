@@ -20,4 +20,3 @@ params:
   z_score_x: independent
   z_score_theta: independent
   state_dict_saving_rate: null
-  variant: B

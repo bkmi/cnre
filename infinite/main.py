@@ -70,7 +70,6 @@ def main(cfg: DictConfig) -> None:
     gpu = True if cfg.device != "cpu" else False
     if gpu:
         log.info(f"number of available gpus: {torch.cuda.device_count()}")
-        # log.info(f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']}")
         try:
             device_id = int(cfg.device[-1])
         except:
@@ -79,6 +78,8 @@ def main(cfg: DictConfig) -> None:
         torch.set_default_tensor_type(
             "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
         )
+    else:
+        device_id = "cpu"
     log.info(
         f"using device {torch.device(device_id)} named {torch.cuda.get_device_name()}"
     )
@@ -86,7 +87,7 @@ def main(cfg: DictConfig) -> None:
     # Run
     task = sbibm.get_task(cfg.task.name)
     t0 = time.time()
-    parts = cfg.algorithm.run.split(".")
+    parts = cfg.algorithm_data.run.split(".")
     module_name = ".".join(parts[:-1])
     run_fn = getattr(importlib.import_module(module_name), parts[-1])
     algorithm_params = cfg.algorithm.params if "params" in cfg.algorithm else {}
@@ -95,7 +96,7 @@ def main(cfg: DictConfig) -> None:
         task=task,
         num_posterior_samples=task.num_posterior_samples,
         max_num_epochs=cfg.max_num_epochs,
-        max_steps_per_epoch=cfg.max_steps_per_epoch,
+        **cfg.data,
         **algorithm_params,
     )
     # TODO, make this consistent

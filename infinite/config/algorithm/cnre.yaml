@@ -1,5 +1,4 @@
 name: CNRE
-run: cnre.algorithms.cnre.CNREInfinite
 device: cpu
 params:
   learning_rate: 5e-4
@@ -22,5 +21,4 @@ params:
   z_score_x: independent
   z_score_theta: independent
   state_dict_saving_rate: null
-  num_validation_examples: 2_048
   gamma: 1.0

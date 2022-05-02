@@ -5,6 +5,8 @@ compute_metrics: true
 defaults:
   - algorithm: cnre
   - task: two_moons
+  - data: joint
+  - algorithm_data: ${algorithm}_${data}
   - _self_
 
 # Device to use, set on per-algorithm basis
@@ -16,6 +18,5 @@ num_cores: ${hydra:launcher.cpus_per_task}
 # Seed
 seed: null
 
-# define how long to go
+# how long to train
 max_num_epochs: ???
-max_steps_per_epoch: ???

@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 import torch.nn
@@ -11,6 +11,7 @@ from sbi.utils import mcmc_transform, repeat_rows
 from torch.distributions import Distribution
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.utils.data.dataloader import DataLoader
+from torch.utils.data.dataset import IterableDataset
 from tqdm import trange
 
 
@@ -149,6 +150,90 @@ def loss(
     # return -(pm * log_prob_marginal + pj * logK.exp() * log_prob_joint)
 
 
+def classifier_logits_cheap_prior(
+    classifier: torch.nn.Module,
+    theta: torch.Tensor,
+    x: torch.Tensor,
+    num_atoms: int,
+    extra_theta: torch.Tensor,
+) -> torch.Tensor:
+    """Return logits obtained through classifier forward pass.
+
+    The logits are obtained from atomic sets of (theta,x) pairs.
+    """
+    batch_size = theta.shape[0]
+    repeated_x = repeat_rows(x, num_atoms)
+    extra_theta = extra_theta[: batch_size * (num_atoms - 1)]
+    extra_theta = extra_theta.reshape(batch_size, num_atoms - 1, theta.shape[-1])
+    atomic_theta = torch.cat((theta[:, None, :], extra_theta), dim=1).reshape(
+        batch_size * num_atoms, -1
+    )
+    return classifier([atomic_theta, repeated_x])
+
+
+def loss_cheap_prior(
+    classifier: torch.nn.Module,
+    theta: torch.Tensor,
+    x: torch.Tensor,
+    num_atoms: int,
+    gamma: float,
+    extra_theta: torch.Tensor,
+    **kwargs,
+) -> torch.Tensor:
+    """num_atoms should include the always marginal draw, i.e. num_atoms = K + 1 with K possible jointly drawn samples and 1 marginal sample
+
+    loss = 2 * loss_bce, due to the mean computation over more items in loss_bce
+    """
+    assert num_atoms >= 2
+    assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
+    batch_size = theta.shape[0]
+    extra_batch_size = extra_theta.shape[0]
+    logits_marginal = classifier_logits_cheap_prior(
+        classifier, theta, x, num_atoms, extra_theta[: extra_batch_size // 2]
+    )
+    logits_joint = classifier_logits_cheap_prior(
+        classifier, theta, x, num_atoms, extra_theta[extra_batch_size // 2 :]
+    )
+    dtype = logits_marginal.dtype
+    device = logits_marginal.device
+
+    # For 1-out-of-`num_atoms` classification each datapoint consists
+    # of `num_atoms` points, with one of them being the correct one.
+    # We have a batch of `batch_size` such datapoints.
+    logits_marginal = logits_marginal.reshape(batch_size, num_atoms)
+    logits_joint = logits_joint.reshape(batch_size, num_atoms)
+
+    # Index 0 is the theta-x-pair sampled from the joint p(theta,x) and hence the
+    # "correct" one for the 1-out-of-N classification.
+    # We remove the jointly drawn sample from the logits_marginal
+    logits_marginal = logits_marginal[:, 1:]
+    # ... and retain it in the logits_joint.
+    logits_joint = logits_joint[:, :-1]
+
+    # To use logsumexp, we extend the denominator logits with loggamma
+    loggamma = torch.tensor(gamma, dtype=dtype, device=device).log()
+    logK = torch.tensor(num_atoms - 1, dtype=dtype, device=device).log()
+    denominator_marginal = torch.concat(
+        [loggamma + logits_marginal, logK.expand((batch_size, 1))],
+        dim=-1,
+    )
+    denominator_joint = torch.concat(
+        [loggamma + logits_joint, logK.expand((batch_size, 1))],
+        dim=-1,
+    )
+
+    # Index 0 is the theta-x-pair sampled from the joint p(theta,x) and hence the
+    # "correct" one for the 1-out-of-N classification.
+    log_prob_marginal = logK - torch.logsumexp(denominator_marginal, dim=-1)
+    log_prob_joint = (
+        loggamma + logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
+    )
+
+    # relative weights
+    pm, pj = get_pmarginal_pjoint(num_atoms, gamma)
+    return -torch.mean(pm * log_prob_marginal + pj * logK.exp() * log_prob_joint)
+
+
 def expected_log_ratio(
     loader,
     classifier,
@@ -204,6 +289,10 @@ def iterate_over_two_dataloaders(
     if dl_large is None:
         for data_small in dl_small:
             yield data_small, [None]
+    elif isinstance(dl_large.dataset, IterableDataset):
+        # for the infinite large case
+        for data_small, data_large in zip(dl_small, dl_large):
+            yield data_small, [data_large]
     else:
         assert len(dl_small) <= len(dl_large)
         dl_iterator_small = iter(dl_small)
@@ -227,9 +316,10 @@ def train(
     clip_max_norm: Optional[float] = 5.0,
     num_atoms: int = 2,
     gamma: float = 1.0,
-    reuse: bool = True,
+    reuse: bool = False,
     max_steps_per_epoch: Optional[int] = None,
     state_dict_saving_rate: Optional[int] = None,
+    loss: Callable = loss,
 ):
     best_network_state_dict = None
     min_loss = float("-Inf")

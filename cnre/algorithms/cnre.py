@@ -10,12 +10,18 @@ from sbibm.algorithms.sbi.utils import (
     wrap_simulator_fn,
 )
 from sbibm.tasks.task import Task
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from cnre.algorithms.utils import AlgorithmOutput
 from cnre.data.joint import JointSampler, get_endless_train_loader_and_new_valid_loader
 from cnre.data.prior import PriorSampler
-from cnre.experiments import expected_log_ratio, get_sbi_posterior, train
+from cnre.experiments import (
+    expected_log_ratio,
+    get_dataloaders,
+    get_sbi_posterior,
+    loss_cheap_prior,
+    train,
+)
 
 
 class CNREBase(ABC):
@@ -202,26 +208,59 @@ class CNREInfinite(CNREBase):
 
 class CNRECheapPrior(CNREBase):
     def __init__(
-        self, num_simulations: int, simulation_batch_size: int, *args, kwargs
+        self,
+        num_simulations: int,
+        simulation_batch_size: int,
+        validation_fraction: float,
+        *args,
+        **kwargs
     ) -> None:
         super().__init__(*args, **kwargs)
         self.num_simulations = num_simulations
         self.simulation_batch_size = simulation_batch_size
-        raise NotImplementedError()  # TODO
+        self.validation_fraction = validation_fraction
 
-    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader, DataLoader, DataLoader]:
         theta, x = inference.simulate_for_sbi(
             self.simulator,
             self.prior,
-            num_simulations=self.num_simulations_per_round,
+            num_simulations=self.num_simulations,
             simulation_batch_size=self.simulation_batch_size,
         )
-        # train_loader, valid_loader = get_dataloaders(
-        #     dataset, training_batch_size, validation_fraction
-        # )
+        dataset = TensorDataset(theta, x)
+        train_loader, valid_loader = get_dataloaders(
+            dataset, self.training_batch_size, self.validation_fraction
+        )
 
-        prior_sampler = PriorSampler(self.prior, self.training_batch_size)
+        prior_sampler = PriorSampler(
+            self.prior, 2 * (self.num_atoms - 1) * self.training_batch_size
+        )
         prior_sample_loader = DataLoader(
             prior_sampler, batch_size=None, batch_sampler=None
         )
-        return train_loader, valid_loader, prior_sample_loader
+        return train_loader, valid_loader, prior_sample_loader, prior_sample_loader
+
+    def train(
+        self,
+        classifier,
+        optimizer,
+        train_loader,
+        val_loader,
+        extra_train_loader,
+        extra_val_loader,
+    ):
+        return train(
+            classifier,
+            optimizer,
+            self.max_num_epochs,
+            train_loader,
+            val_loader,
+            extra_train_loader,
+            extra_val_loader,
+            num_atoms=self.num_atoms,
+            gamma=self.gamma,
+            reuse=self.reuse,
+            max_steps_per_epoch=self.max_steps_per_epoch,
+            state_dict_saving_rate=self.state_dict_saving_rate,
+            loss=loss_cheap_prior,
+        )

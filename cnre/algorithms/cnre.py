@@ -3,15 +3,11 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 from sbi import inference
-from sbi.utils.get_nn_models import classifier_nn
-from sbibm.algorithms.sbi.utils import (
-    wrap_posterior,
-    wrap_prior_dist,
-    wrap_simulator_fn,
-)
+from sbibm.algorithms.sbi.utils import wrap_posterior
 from sbibm.tasks.task import Task
 from torch.utils.data import DataLoader, TensorDataset
 
+from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import AlgorithmOutput
 from cnre.data.joint import JointSampler, get_endless_train_loader_and_new_valid_loader
 from cnre.data.prior import PriorSampler
@@ -24,13 +20,13 @@ from cnre.experiments import (
 )
 
 
-class CNREBase(ABC):
+class CNREBase(AlgBase, ABC):
     def __init__(
         self,
         task: Task,
         num_posterior_samples: int,
         max_num_epochs: int,
-        learning_rate: float = 5e-4,
+        learning_rate: float = 0.0005,
         neural_net: str = "resnet",
         hidden_features: int = 50,
         num_blocks: int = 2,
@@ -47,7 +43,6 @@ class CNREBase(ABC):
             "init_strategy": "sir",
             "sir_batch_size": 1000,
             "sir_num_batches": 100,
-            "warmup_steps": 25,
         },
         z_score_x: bool = True,
         z_score_theta: bool = True,
@@ -55,60 +50,30 @@ class CNREBase(ABC):
         gamma: float = 1.0,
         reuse: bool = False,
     ) -> None:
-        self.task = task
-        self.prior = task.get_prior_dist()
-        self.simulator = task.get_simulator()
-
-        self.transforms = task._get_transforms(automatic_transforms_enabled)[
-            "parameters"
-        ]
-        if automatic_transforms_enabled:
-            self.prior = wrap_prior_dist(self.prior, self.transforms)
-            self.simulator = wrap_simulator_fn(self.simulator, self.transforms)
-
-        self.get_classifier = classifier_nn(
-            model=neural_net.lower(),
-            hidden_features=hidden_features,
-            num_blocks=num_blocks,
-            use_batch_norm=use_batch_norm,
-            z_score_x=z_score_x,
-            z_score_theta=z_score_theta,
+        super().__init__(
+            task,
+            num_posterior_samples,
+            max_num_epochs,
+            learning_rate,
+            neural_net,
+            hidden_features,
+            num_blocks,
+            use_batch_norm,
+            training_batch_size,
+            num_atoms,
+            automatic_transforms_enabled,
+            sample_with,
+            mcmc_method,
+            mcmc_parameters,
+            z_score_x,
+            z_score_theta,
+            state_dict_saving_rate,
         )
 
-        self.get_optimizer = torch.optim.Adam
-        self.num_posterior_samples = num_posterior_samples
-        self.max_num_epochs = max_num_epochs
-        self.learning_rate = learning_rate
-        self.training_batch_size = training_batch_size
-        self.num_atoms = num_atoms
         self.gamma = gamma
         self.reuse = reuse
-        self.state_dict_saving_rate = state_dict_saving_rate
-        self.sample_with = sample_with
-        self.mcmc_method = mcmc_method
-        self.mcmc_parameters = mcmc_parameters
 
-        self.max_steps_per_epoch = None
-
-    @abstractmethod
-    def get_dataloaders(
-        self,
-    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def train(
-        self,
-        classifier: torch.nn.Module,
-        optimizer,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
-        extra_train_loader: DataLoader,
-        extra_val_loader: DataLoader,
-    ) -> Dict:
-        raise NotImplementedError()
-
-    def run(self):
+    def run(self) -> AlgorithmOutput:
         (
             train_loader,
             val_loader,
@@ -189,7 +154,7 @@ class CNREInfinite(CNREBase):
         val_loader,
         extra_train_loader,
         extra_val_loader,
-    ):
+    ) -> Dict:
         return train(
             classifier,
             optimizer,
@@ -248,7 +213,7 @@ class CNRECheapPrior(CNREBase):
         val_loader,
         extra_train_loader,
         extra_val_loader,
-    ):
+    ) -> Dict:
         return train(
             classifier,
             optimizer,
@@ -260,7 +225,7 @@ class CNRECheapPrior(CNREBase):
             num_atoms=self.num_atoms,
             gamma=self.gamma,
             reuse=self.reuse,
-            max_steps_per_epoch=self.max_steps_per_epoch,
+            max_steps_per_epoch=None,
             state_dict_saving_rate=self.state_dict_saving_rate,
             loss=loss_cheap_prior,
         )

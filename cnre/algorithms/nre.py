@@ -1,6 +1,7 @@
 import logging
+from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -16,9 +17,12 @@ from sbibm.algorithms.sbi.utils import (
 from sbibm.tasks.task import Task
 from sbibm.utils.torch import get_default_device
 from torch.nn.utils.clip_grad import clip_grad_norm_
+from torch.utils.data.dataloader import DataLoader
 
 import cnre.data.joint
+from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import AlgorithmOutput
+from cnre.experiments import expected_log_ratio
 
 
 class SNRE_B_INF(inference.SNRE_B):
@@ -146,177 +150,219 @@ class SNRE_B_INF(inference.SNRE_B):
         return deepcopy(self._neural_net)
 
 
-# TODO, make this into a class which you can iterate easily for unlimited prior draws.
-def run_nre(
-    task: Task,
-    num_posterior_samples: int,
-    max_steps_per_epoch: int,
-    num_validation_examples: int,
-    learning_rate: float = 5e-4,
-    num_rounds: int = 1,
-    neural_net: str = "resnet",
-    hidden_features: int = 50,
-    num_blocks: int = 2,
-    use_batch_norm: bool = True,
-    training_batch_size: int = 10000,
-    num_atoms: int = 10,
-    automatic_transforms_enabled: bool = True,
-    sample_with: str = "mcmc",
-    mcmc_method: str = "slice_np_vectorized",
-    mcmc_parameters: Dict[str, Any] = {
-        "num_chains": 100,
-        "thin": 10,
-        "warmup_steps": 100,
-        "init_strategy": "sir",
-        "sir_batch_size": 1000,
-        "sir_num_batches": 100,
-    },
-    z_score_x: bool = True,
-    z_score_theta: bool = True,
-    variant: str = "B",
-    max_num_epochs: Optional[int] = None,
-    state_dict_saving_rate: Optional[int] = None,
-) -> Dict:
-    """Runs infinite (S)NRE
-
-    Args:
-        task: Task instance
-        num_samples: Number of samples to generate from posterior
-        num_observation: Observation number to load, alternative to `observation`
-        observation: Observation, alternative to `num_observation`
-        num_simulations: Simulation budget
-        num_rounds: Number of rounds
-        neural_net: Neural network to use, one of linear / mlp / resnet
-        hidden_features: Number of hidden features in network
-        simulation_batch_size: Batch size for simulator
-        training_batch_size: Batch size for training network
-        num_atoms: Number of atoms, -1 means same as `training_batch_size`
-        automatic_transforms_enabled: Whether to enable automatic transforms
-        mcmc_method: MCMC method
-        mcmc_parameters: MCMC parameters
-        z_score_x: Whether to z-score x
-        z_score_theta: Whether to z-score theta
-        variant: Can be used to switch between SNRE-A (AALR) and -B (SRE)
-        max_num_epochs: Maximum number of epochs
-
-    Returns:
-        Samples from posterior, number of simulator calls, log probability of true params if computable
-    """
-    log = logging.getLogger(__name__)
-
-    if num_rounds == 1:
-        log.info(f"Running NRE")
-        # num_simulations_per_round = num_simulations
-    else:
-        raise NotImplementedError()
-        log.info(f"Running SNRE")
-        num_simulations_per_round = math.floor(num_simulations / num_rounds)
-
-    # if simulation_batch_size > num_simulations_per_round:
-    #     simulation_batch_size = num_simulations_per_round
-    #     log.warn("Reduced simulation_batch_size to num_simulation_per_round")
-
-    # if training_batch_size > num_simulations_per_round:
-    #     training_batch_size = num_simulations_per_round
-    #     log.warn("Reduced training_batch_size to num_simulation_per_round")
-
-    prior = task.get_prior_dist()
-    # if observation is None:
-    #     observation = task.get_observation(num_observation)
-    simulator = task.get_simulator()
-
-    transforms = task._get_transforms(automatic_transforms_enabled)["parameters"]
-    if automatic_transforms_enabled:
-        prior = wrap_prior_dist(prior, transforms)
-        simulator = wrap_simulator_fn(simulator, transforms)
-
-    classifier = classifier_nn(
-        model=neural_net.lower(),
-        hidden_features=hidden_features,
-        num_blocks=num_blocks,
-        use_batch_norm=use_batch_norm,
-        z_score_x=z_score_x,
-        z_score_theta=z_score_theta,
-    )
-    if variant == "A":
-        inference_class = inference.SNRE_A
-        inference_method_kwargs = {}
-        raise NotImplementedError()
-    elif variant == "B":
-        inference_class = SNRE_B_INF
-        inference_method_kwargs = {"num_atoms": num_atoms}
-    else:
-        raise NotImplementedError
-
-    device_string = (
-        f"{get_default_device().type}:{get_default_device().index}"
-        if get_default_device().type == "cuda"
-        else f"{get_default_device().type}"
-    )
-    inference_method = inference_class(
-        classifier=classifier, prior=prior, device=device_string
-    )
-
-    posteriors = []
-    proposal = prior
-    mcmc_parameters["warmup_steps"] = 25
-    # mcmc_parameters["enable_transform"] = False  # NOTE: Disable `sbi` auto-transforms, since `sbibm` does its own
-
-    dataset = cnre.data.joint.JointSampler(simulator, proposal, training_batch_size)
-    (
-        train_loader,
-        valid_loader,
-    ) = cnre.data.joint.get_endless_train_loader_and_new_valid_loader(
-        dataset,
-        num_validation_examples,
-    )
-
-    for r in range(num_rounds):
-        density_estimator = inference_method.train(
-            max_steps_per_epoch,
-            train_loader,
-            val_loader=valid_loader,
-            get_optimizer=torch.optim.Adam,
-            training_batch_size=training_batch_size,
-            learning_rate=learning_rate,
-            max_num_epochs=max_num_epochs,
-            stop_after_epochs=2**30 - 1,
-            state_dict_saving_rate=state_dict_saving_rate,
-            **inference_method_kwargs,
+class NREBase(AlgBase, ABC):
+    def __init__(
+        self,
+        task: Task,
+        num_posterior_samples: int,
+        max_num_epochs: int,
+        learning_rate: float = 0.0005,
+        neural_net: str = "resnet",
+        hidden_features: int = 50,
+        num_blocks: int = 2,
+        use_batch_norm: bool = True,
+        training_batch_size: int = 10000,
+        num_atoms: int = 10,
+        automatic_transforms_enabled: bool = True,
+        sample_with: str = "mcmc",
+        mcmc_method: str = "slice_np_vectorized",
+        mcmc_parameters: Dict[str, Any] = {
+            "num_chains": 100,
+            "thin": 10,
+            "warmup_steps": 100,
+            "init_strategy": "sir",
+            "sir_batch_size": 1000,
+            "sir_num_batches": 100,
+        },
+        z_score_x: bool = True,
+        z_score_theta: bool = True,
+        state_dict_saving_rate: Optional[int] = None,
+        variant: str = "B",
+    ) -> None:
+        super().__init__(
+            task,
+            num_posterior_samples,
+            max_num_epochs,
+            learning_rate,
+            neural_net,
+            hidden_features,
+            num_blocks,
+            use_batch_norm,
+            training_batch_size,
+            num_atoms,
+            automatic_transforms_enabled,
+            sample_with,
+            mcmc_method,
+            mcmc_parameters,
+            z_score_x,
+            z_score_theta,
+            state_dict_saving_rate,
         )
-        # if r > 1:
-        #     mcmc_parameters["init_strategy"] = "latest_sample"
+        self.variant = variant
+        if self.variant == "A":
+            inference_class = inference.SNRE_A
+            self.inference_method_kwargs = {}
+            raise NotImplementedError()
+        elif self.variant == "B":
+            inference_class = SNRE_B_INF
+            self.inference_method_kwargs = {"num_atoms": self.num_atoms}
+        else:
+            raise NotImplementedError
 
-    density_estimator.load_state_dict(inference_method._best_model_state_dict)
+        device_string = (
+            f"{get_default_device().type}:{get_default_device().index}"
+            if get_default_device().type == "cuda"
+            else f"{get_default_device().type}"
+        )
+        self.inference_method = inference_class(
+            classifier=self.get_classifier,
+            prior=self.prior,
+            device=device_string,
+        )
 
-    avg_log_ratio = cnre.expected_log_ratio(valid_loader, density_estimator)
+    @abstractmethod
+    def train(
+        self,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        extra_train_loader: DataLoader,
+        extra_val_loader: DataLoader,
+    ) -> nn.Module:
+        raise NotImplementedError()
 
-    posterior = inference_method.build_posterior(
-        density_estimator,
-        sample_with=sample_with,
-        mcmc_method=mcmc_method,
-        mcmc_parameters=mcmc_parameters,
-        enable_transform=False,  # NOTE: Disable `sbi` auto-transforms, since `sbibm` does its own
-    )
-    # Copy hyperparameters, e.g., mcmc_init_samples for "latest_sample" strategy.
-    # if r > 0:
-    #     posterior.copy_hyperparameters_from(posteriors[-1])
-    # proposal = posterior.set_default_x(observation)
-    # posteriors.append(posterior)
+    def run(self) -> AlgorithmOutput:
+        (
+            train_loader,
+            val_loader,
+            extra_train_loader,
+            extra_val_loader,
+        ) = self.get_dataloaders()
 
-    posterior = wrap_posterior(posterior, transforms)
-    observations = [
-        task.get_observation(num_observation) for num_observation in range(1, 11)
-    ]
-    samples = [
-        posterior.sample((num_posterior_samples,), x=observation).detach()
-        for observation in observations
-    ]
+        density_estimator = self.train(
+            train_loader,
+            val_loader,
+            extra_train_loader,
+            extra_val_loader,
+        )
 
-    return AlgorithmOutput(
-        posterior_samples=samples,
-        num_simulations=simulator.num_simulations,
-        validation_loss=[-i for i in inference_method._summary["validation_log_probs"]],
-        avg_log_ratio=avg_log_ratio,
-        state_dicts=inference_method._state_dicts,
-    )
+        density_estimator.load_state_dict(self.inference_method._best_model_state_dict)
+
+        avg_log_ratio = expected_log_ratio(val_loader, density_estimator)
+
+        posterior = self.inference_method.build_posterior(
+            density_estimator,
+            sample_with=self.sample_with,
+            mcmc_method=self.mcmc_method,
+            mcmc_parameters=self.mcmc_parameters,
+            enable_transform=False,  # NOTE: Disable `sbi` auto-transforms, since `sbibm` does its own
+        )
+
+        posterior = wrap_posterior(posterior, self.transforms)
+        observations = [
+            self.task.get_observation(num_observation)
+            for num_observation in range(1, 11)
+        ]
+        samples = [
+            posterior.sample((self.num_posterior_samples,), x=observation).detach()
+            for observation in observations
+        ]
+
+        return AlgorithmOutput(
+            posterior_samples=samples,
+            num_simulations=self.simulator.num_simulations,
+            validation_loss=[
+                -i for i in self.inference_method._summary["validation_log_probs"]
+            ],
+            avg_log_ratio=avg_log_ratio,
+            state_dicts=self.inference_method._state_dicts,
+        )
+
+
+class NREInfinite(NREBase):
+    def __init__(
+        self,
+        task: Task,
+        num_posterior_samples: int,
+        max_num_epochs: int,
+        max_steps_per_epoch: int,
+        num_validation_examples: int,
+        learning_rate: float = 0.0005,
+        neural_net: str = "resnet",
+        hidden_features: int = 50,
+        num_blocks: int = 2,
+        use_batch_norm: bool = True,
+        training_batch_size: int = 10000,
+        num_atoms: int = 10,
+        automatic_transforms_enabled: bool = True,
+        sample_with: str = "mcmc",
+        mcmc_method: str = "slice_np_vectorized",
+        mcmc_parameters: Dict[str, Any] = {
+            "num_chains": 100,
+            "thin": 10,
+            "warmup_steps": 100,
+            "init_strategy": "sir",
+            "sir_batch_size": 1000,
+            "sir_num_batches": 100,
+        },
+        z_score_x: bool = True,
+        z_score_theta: bool = True,
+        state_dict_saving_rate: Optional[int] = None,
+        variant: str = "B",
+    ) -> None:
+        super().__init__(
+            task,
+            num_posterior_samples,
+            max_num_epochs,
+            learning_rate,
+            neural_net,
+            hidden_features,
+            num_blocks,
+            use_batch_norm,
+            training_batch_size,
+            num_atoms,
+            automatic_transforms_enabled,
+            sample_with,
+            mcmc_method,
+            mcmc_parameters,
+            z_score_x,
+            z_score_theta,
+            state_dict_saving_rate,
+            variant,
+        )
+        self.max_steps_per_epoch = max_steps_per_epoch
+        self.num_validation_examples = num_validation_examples
+
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        dataset = cnre.data.joint.JointSampler(
+            self.simulator, self.prior, self.training_batch_size
+        )
+        (
+            train_loader,
+            valid_loader,
+        ) = cnre.data.joint.get_endless_train_loader_and_new_valid_loader(
+            dataset,
+            self.num_validation_examples,
+        )
+        return train_loader, valid_loader, None, None
+
+    def train(
+        self,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        *args,
+        **kwargs,
+    ) -> Dict:
+        return self.inference_method.train(
+            self.max_steps_per_epoch,
+            train_loader,
+            val_loader=val_loader,
+            get_optimizer=self.get_optimizer,
+            training_batch_size=self.training_batch_size,
+            learning_rate=self.learning_rate,
+            max_num_epochs=self.max_num_epochs,
+            stop_after_epochs=2**30 - 1,
+            state_dict_saving_rate=self.state_dict_saving_rate,
+            **self.inference_method_kwargs,
+        )

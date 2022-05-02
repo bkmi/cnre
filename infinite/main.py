@@ -99,11 +99,7 @@ def main(cfg: DictConfig) -> None:
         **cfg.data,
         **algorithm_params,
     )
-    # TODO, make this consistent
-    if isinstance(obj, AlgorithmOutput):
-        output = obj
-    else:
-        output = obj.run()
+    output = obj.run()
     runtime = time.time() - t0
     log.info("Finished run")
 

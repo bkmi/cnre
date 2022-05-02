@@ -1,1 +1,1 @@
-run: cnre.algorithms.nre.run_nre
+run: cnre.algorithms.nre.NREInfinite

@@ -1,19 +1,16 @@
 import logging
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 import sbibm
-import sbibm.metrics as metrics  # noqa
-import scipy
-import scipy.integrate
-import scipy.stats
+import sbibm.metrics as metrics  # noqa # save this
 import torch
 import torch.distributions
-from joblib import Parallel, cpu_count, delayed, parallel_backend
-from omegaconf import DictConfig, OmegaConf
+from joblib import Parallel, delayed, parallel_backend
+from omegaconf import OmegaConf
 from sbibm.tasks.task import Task
 from sbibm.utils.io import get_float_from_csv, get_tensor_from_csv
 from toolz import merge, valmap

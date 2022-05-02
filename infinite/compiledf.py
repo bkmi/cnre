@@ -51,19 +51,11 @@ def compile_df(
         # row["max_num_epochs"] = cfg["algorithm"]["params"]["max_num_epochs"]
 
         if cfg["algorithm"]["name"].lower() in ["nre", "snre"]:
-            row["algorithm"] = (
-                cfg["algorithm"]["name"] + "-" + cfg["algorithm"]["params"]["variant"]
-            )
+            row["algorithm"] = cfg["algorithm"]["name"] + "-B"
         else:
             row["algorithm"] = cfg["algorithm"]["name"]
 
-        if (
-            cfg["algorithm"]["name"].lower() in ["nre", "snre"]
-            and cfg["algorithm"]["params"]["variant"].lower() == "a"
-        ):
-            row["num_atoms"] = 2
-        else:
-            row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
+        row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
 
         try:
             row["gamma"] = cfg["algorithm"]["params"]["gamma"]

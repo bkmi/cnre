@@ -13,13 +13,13 @@ import sbibm
 import torch
 import torch.distributions
 import yaml
-from metrics import compute_metrics_df
 from omegaconf import DictConfig, OmegaConf
 from sbi import inference as inference
 from sbibm.utils.debug import pdb_hook
 from sbibm.utils.io import save_float_to_csv, save_tensor_to_csv
 
 import cnre
+from cnre.diagnostics.metricsdf import compute_metrics_df
 
 
 @hydra.main(config_path="config", config_name="config")

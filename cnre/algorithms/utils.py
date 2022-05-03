@@ -6,9 +6,9 @@ from sbi import inference
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import TensorDataset
 
+from cnre.data.benchmark import get_dataloaders
 from cnre.data.joint import JointSampler, get_endless_train_loader_and_new_valid_loader
 from cnre.data.prior import PriorSampler
-from cnre.experiments import get_dataloaders
 
 
 @dataclass
@@ -55,3 +55,17 @@ def get_cheap_prior_dataloaders(
     )
     prior_sample_loader = DataLoader(prior_sampler, batch_size=None, batch_sampler=None)
     return train_loader, valid_loader, prior_sample_loader, prior_sample_loader
+
+
+def get_benchmark_dataloaders(self) -> Tuple[DataLoader, DataLoader, None, None]:
+    theta, x = inference.simulate_for_sbi(
+        self.simulator,
+        self.prior,
+        num_simulations=self.num_simulations,
+        simulation_batch_size=self.simulation_batch_size,
+    )
+    dataset = TensorDataset(theta, x)
+    train_loader, valid_loader = get_dataloaders(
+        dataset, self.training_batch_size, self.validation_fraction
+    )
+    return train_loader, valid_loader, None, None

@@ -23,6 +23,7 @@ import cnre.data.joint
 from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import (
     AlgorithmOutput,
+    get_benchmark_dataloaders,
     get_cheap_joint_dataloaders,
     get_cheap_prior_dataloaders,
 )
@@ -509,4 +510,43 @@ class NRECheapPrior(NREBase):
             stop_after_epochs=2**30 - 1,
             state_dict_saving_rate=self.state_dict_saving_rate,
             **self.inference_method_kwargs,
+        )
+
+
+class NREBenchmark(NREBase):
+    def __init__(
+        self, max_steps_per_epoch: int, num_validation_examples: int, *args, **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_steps_per_epoch = max_steps_per_epoch
+        self.num_validation_examples = num_validation_examples
+
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        return get_benchmark_dataloaders(self)
+
+    def train(
+        self,
+        classifier,
+        optimizer,
+        train_loader,
+        val_loader,
+        extra_train_loader,
+        extra_val_loader,
+    ) -> Dict:
+        raise NotImplementedError()  # TODO
+        return train(
+            classifier,
+            optimizer,
+            self.max_num_epochs,
+            train_loader,
+            val_loader,
+            extra_train_loader,
+            extra_val_loader,
+            num_atoms=self.num_atoms,
+            gamma=self.gamma,
+            reuse=self.reuse,
+            max_steps_per_epoch=self.max_steps_per_epoch,
+            state_dict_saving_rate=self.state_dict_saving_rate,
         )

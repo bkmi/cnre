@@ -108,7 +108,7 @@ def get_metrics(
             metrics_dict[metric] = eval(eval_cmd).cpu().numpy().astype(np.float32)
             log.info(f"{metric}: {metrics_dict[metric]}")
         except:
-            metrics_dict[metric] = float("nan")
+            metrics_dict[metric] = [float("nan")]
 
     return metrics_dict
 
@@ -227,7 +227,7 @@ def compute_metrics_df(
 
 
 def root_to_metrics_df(
-    root: Path, log: logging.Logger, overwrite: bool
+    root: Path, log: logging.Logger, overwrite: bool, n_jobs: int
 ) -> pd.DataFrame:
     metrics_path = root / "metrics.csv"
     if not metrics_path.exists() or overwrite:
@@ -238,18 +238,20 @@ def root_to_metrics_df(
 
     try:
         cfg = OmegaConf.to_container(OmegaConf.load(str(root / "run.yaml")))
-        path_samples = root / "posterior_samples.csv.bz2"
+        path_posterior_samples_root = root / "posterior_samples"
         path_runtime = root / "runtime.csv"
-        path_predictive_samples = root / "predictive_samples.csv.bz2"
-        path_log_prob_true_parameters = root / "log_prob_true_parameters.csv"
+        path_predictive_samples_root = root / "predictive_samples"
+        path_log_prob_true_parameters_root = root / "log_prob_true_parameters"
+        path_avg_log_ratio = root / "avg_log_ratio.csv"
 
         df_metrics = compute_metrics_df(
-            cfg["task"]["name"],
-            cfg["task"]["num_observation"],
-            path_samples,
-            path_runtime,
-            path_predictive_samples,
-            path_log_prob_true_parameters,
+            task_name=cfg["task"]["name"],
+            path_posterior_samples_root=path_posterior_samples_root,
+            path_runtime=path_runtime,
+            path_predictive_samples_root=path_predictive_samples_root,
+            path_log_prob_true_parameters_root=path_log_prob_true_parameters_root,
+            path_avg_log_ratio=path_avg_log_ratio,
+            n_jobs=n_jobs,
             log=log,
         )
         df_metrics.to_csv(metrics_path, index=False)
@@ -260,19 +262,22 @@ def root_to_metrics_df(
         return (root, error)
 
 
-def main(roots: list, overwrite: bool) -> None:
+def main(roots: list, overwrite: bool, n_jobs: int) -> None:
     log = logging.getLogger(__name__)
     roots = [Path(root) for root in roots]
 
     results = []
     for root in tqdm(roots, leave=False):
-        results.append(root_to_metrics_df(root, log=log, overwrite=overwrite))
+        results.append(
+            root_to_metrics_df(root, log=log, overwrite=overwrite, n_jobs=n_jobs)
+        )
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--roots", nargs="+", default=[])
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--n_jobs", type=int)
     args = parser.parse_args()
 
     main(**vars(args))

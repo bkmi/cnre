@@ -6,7 +6,6 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 import sbibm
-import sbibm.metrics as metrics  # noqa # save this
 import torch
 import torch.distributions
 from joblib import Parallel, delayed, parallel_backend
@@ -80,6 +79,9 @@ def get_metrics(
 
     # compute a metrics dict
 
+    # this line is required
+    import sbibm.metrics as metrics  # noqa # save this
+
     # Names of all metrics as keys, values are calls that are passed to eval
     # NOTE: Originally, we computed a large number of metrics, as reflected in the
     # dictionary below. Ultimately, we used 10k samples and z-scoring for C2ST but
@@ -107,7 +109,9 @@ def get_metrics(
         try:
             metrics_dict[metric] = eval(eval_cmd).cpu().numpy().astype(np.float32)
             log.info(f"{metric}: {metrics_dict[metric]}")
-        except:
+        except Exception as e:
+            print(e)
+            log.debug(e)
             metrics_dict[metric] = [float("nan")]
 
     return metrics_dict
@@ -186,7 +190,6 @@ def compute_metrics_df(
             )
 
     metrics_dict = merge(metrics_dict, *metrics_dict_by_num_obs)
-
     # # Load samples and things which depend on num_observation
     # reference_posterior_samples, algorithm_posterior_samples = get_ref_and_alg_samples(task, num_observation, path_posterior_samples_root, log)
     # predictive_samples = get_pred_samples(task, num_observation, path_predictive_samples_root)
@@ -233,7 +236,7 @@ def root_to_metrics_df(
     if not metrics_path.exists() or overwrite:
         pass
     else:
-        log.info(f"{metrics_path} already exists.")
+        log.debug(f"{metrics_path} already exists.")
         return (root, "exists")
 
     try:
@@ -254,16 +257,20 @@ def root_to_metrics_df(
             n_jobs=n_jobs,
             log=log,
         )
-        df_metrics.to_csv(metrics_path, index=False)
+        log.info(f"saving to {metrics_path}")
         log.info(f"Metrics:\n{df_metrics.transpose().to_string(header=False)}")
+        df_metrics.to_csv(metrics_path, index=False)
         return df_metrics
     except FileNotFoundError as error:
         log.exception(error)
         return (root, error)
 
 
-def main(roots: list, overwrite: bool, n_jobs: int) -> None:
+def main(roots: list, overwrite: bool, n_jobs: int, debug: bool) -> None:
+    logging.basicConfig()
     log = logging.getLogger(__name__)
+    level = logging.DEBUG if debug else logging.INFO
+    log.setLevel(level)
     roots = [Path(root) for root in roots]
 
     results = []
@@ -277,6 +284,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--roots", nargs="+", default=[])
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--n_jobs", type=int)
     args = parser.parse_args()
 

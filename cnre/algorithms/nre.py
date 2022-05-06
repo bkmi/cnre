@@ -40,6 +40,7 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
         state_dict_saving_rate: int = 100,
     ) -> nn.Module:
         self._state_dicts = {}
+        self._avg_log_ratios = []
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -99,6 +100,7 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
             # Calculate validation performance.
             self._neural_net.eval()
             val_log_prob_sum = 0
+            avg_log_ratio = 0
             with torch.no_grad():
                 for batch in val_loader:
                     theta_batch, x_batch = (
@@ -107,9 +109,13 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
                     )
                     val_losses = self._loss(theta_batch, x_batch, num_atoms)
                     val_log_prob_sum -= val_losses.sum().item()
+                    avg_log_ratio += (
+                        self._neural_net([theta, x]).detach().cpu().mean().numpy()
+                    )
                 self._val_log_prob = val_log_prob_sum / (
                     len(val_loader) * clipped_batch_size  # type: ignore
                 )
+                self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
 
@@ -192,6 +198,7 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
         state_dict_saving_rate: int = 100,
     ) -> nn.Module:
         self._state_dicts = {}
+        self._avg_log_ratios = []
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -248,6 +255,7 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
             # Calculate validation performance.
             self._neural_net.eval()
             val_log_prob_sum = 0
+            avg_log_ratio = 0
             with torch.no_grad():
                 for batch, extra_theta in zip(val_loader, extra_val_loader):
                     theta_batch, x_batch = (
@@ -259,9 +267,13 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
                         theta_batch, x_batch, num_atoms, extra_theta
                     )
                     val_log_prob_sum -= val_losses.sum().item()
+                    avg_log_ratio += (
+                        self._neural_net([theta, x]).detach().cpu().mean().numpy()
+                    )
                 self._val_log_prob = val_log_prob_sum / (
                     len(val_loader) * clipped_batch_size  # type: ignore
                 )
+                self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
 
@@ -409,6 +421,7 @@ class NREBase(AlgBase, ABC):
             ],
             avg_log_ratio=avg_log_ratio,
             state_dicts=self.inference_method._state_dicts,
+            avg_log_ratios=self.inference_method._avg_log_ratios,
         )
 
 

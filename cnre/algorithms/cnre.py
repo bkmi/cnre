@@ -124,6 +124,7 @@ class CNREBase(AlgBase, ABC):
             validation_loss=results["valid_losses"],
             avg_log_ratio=avg_log_ratio,
             state_dicts=results["state_dicts"],
+            avg_log_ratios=results["avg_log_ratios"],
         )
 
 

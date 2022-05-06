@@ -55,7 +55,16 @@ def compile_df(
         else:
             row["algorithm"] = cfg["algorithm"]["name"]
 
-        row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
+        # these are paired
+        try:
+            row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
+        except KeyError:
+            row["num_atoms"] = cfg["algorithm"]["params"]["K"]
+
+        try:
+            row["K"] = cfg["algorithm"]["params"]["K"]
+        except KeyError:
+            row["K"] = cfg["algorithm"]["params"]["num_atoms"]
 
         try:
             row["gamma"] = cfg["algorithm"]["params"]["gamma"]

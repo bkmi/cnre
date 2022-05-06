@@ -22,7 +22,6 @@ class AlgBase(ABC):
         num_blocks: int = 2,
         use_batch_norm: bool = True,
         training_batch_size: int = 10000,
-        num_atoms: int = 10,
         automatic_transforms_enabled: bool = True,
         sample_with: str = "mcmc",
         mcmc_method: str = "slice_np_vectorized",
@@ -63,7 +62,6 @@ class AlgBase(ABC):
         self.max_num_epochs = max_num_epochs
         self.learning_rate = learning_rate
         self.training_batch_size = training_batch_size
-        self.num_atoms = num_atoms
         self.state_dict_saving_rate = state_dict_saving_rate
         self.sample_with = sample_with
         self.mcmc_method = mcmc_method

@@ -50,9 +50,12 @@ def get_cheap_prior_dataloaders(
         dataset, self.training_batch_size, self.validation_fraction
     )
 
-    prior_sampler = PriorSampler(
-        self.prior, (self.num_atoms - 1) * self.training_batch_size
-    )
+    try:
+        prior_sampler = PriorSampler(
+            self.prior, (self.num_atoms - 1) * self.training_batch_size
+        )
+    except AttributeError:
+        prior_sampler = PriorSampler(self.prior, self.K * self.training_batch_size)
     prior_sample_loader = DataLoader(prior_sampler, batch_size=None, batch_sampler=None)
     return train_loader, valid_loader, prior_sample_loader, prior_sample_loader
 

@@ -1,4 +1,3 @@
-import logging
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -8,18 +7,12 @@ import torch.nn as nn
 from sbi import inference as inference
 from sbi import utils as utils
 from sbi.utils import clamp_and_warn, x_shape_from_simulation
-from sbi.utils.get_nn_models import classifier_nn
-from sbibm.algorithms.sbi.utils import (
-    wrap_posterior,
-    wrap_prior_dist,
-    wrap_simulator_fn,
-)
+from sbibm.algorithms.sbi.utils import wrap_posterior
 from sbibm.tasks.task import Task
 from sbibm.utils.torch import get_default_device
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.utils.data.dataloader import DataLoader
 
-import cnre.data.joint
 from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import (
     AlgorithmOutput,
@@ -27,11 +20,7 @@ from cnre.algorithms.utils import (
     get_cheap_joint_dataloaders,
     get_cheap_prior_dataloaders,
 )
-from cnre.experiments import (
-    classifier_logits_cheap_prior,
-    expected_log_ratio,
-    loss_cheap_prior,
-)
+from cnre.experiments import classifier_logits_cheap_prior, expected_log_ratio
 
 
 class SNRE_B_CheapJoint(inference.SNRE_B):
@@ -169,9 +158,10 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
     ) -> torch.Tensor:
         assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
         batch_size = theta.shape[0]
-        extra_theta = extra_theta[: batch_size * (num_atoms - 1)]
+        K = num_atoms - 1
+        extra_theta = extra_theta[: batch_size * K]
         logits = classifier_logits_cheap_prior(
-            self._neural_net, theta, x, num_atoms, extra_theta
+            self._neural_net, theta, x, K, extra_theta
         )
 
         # For 1-out-of-`num_atoms` classification each datapoint consists
@@ -348,7 +338,6 @@ class NREBase(AlgBase, ABC):
             num_blocks,
             use_batch_norm,
             training_batch_size,
-            num_atoms,
             automatic_transforms_enabled,
             sample_with,
             mcmc_method,
@@ -357,6 +346,7 @@ class NREBase(AlgBase, ABC):
             z_score_theta,
             state_dict_saving_rate,
         )
+        self.num_atoms = num_atoms
         self.inference_method_kwargs = {"num_atoms": self.num_atoms}
         self.device_string = (
             f"{get_default_device().type}:{get_default_device().index}"

@@ -32,7 +32,7 @@ class CNREBase(AlgBase, ABC):
         num_blocks: int = 2,
         use_batch_norm: bool = True,
         training_batch_size: int = 10000,
-        num_atoms: int = 10,
+        K: int = 9,
         automatic_transforms_enabled: bool = True,
         sample_with: str = "mcmc",
         mcmc_method: str = "slice_np_vectorized",
@@ -60,7 +60,6 @@ class CNREBase(AlgBase, ABC):
             num_blocks,
             use_batch_norm,
             training_batch_size,
-            num_atoms,
             automatic_transforms_enabled,
             sample_with,
             mcmc_method,
@@ -69,7 +68,7 @@ class CNREBase(AlgBase, ABC):
             z_score_theta,
             state_dict_saving_rate,
         )
-
+        self.K = K
         self.gamma = gamma
         self.reuse = reuse
 
@@ -158,7 +157,7 @@ class CNRECheapJoint(CNREBase):
             val_loader,
             extra_train_loader,
             extra_val_loader,
-            num_atoms=self.num_atoms,
+            K=self.K,
             gamma=self.gamma,
             reuse=self.reuse,
             max_steps_per_epoch=self.max_steps_per_epoch,
@@ -202,7 +201,7 @@ class CNRECheapPrior(CNREBase):
             val_loader,
             extra_train_loader,
             extra_val_loader,
-            num_atoms=self.num_atoms,
+            K=self.K,
             gamma=self.gamma,
             reuse=self.reuse,
             max_steps_per_epoch=None,
@@ -242,7 +241,7 @@ class CNREBenchmark(CNREBase):
             val_loader,
             extra_train_loader,
             extra_val_loader,
-            num_atoms=self.num_atoms,
+            K=self.K,
             gamma=self.gamma,
             reuse=self.reuse,
             max_steps_per_epoch=self.max_steps_per_epoch,

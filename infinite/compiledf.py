@@ -56,15 +56,16 @@ def compile_df(
             row["algorithm"] = cfg["algorithm"]["name"]
 
         # these are paired
-        try:
-            row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
-        except KeyError:
-            row["num_atoms"] = cfg["algorithm"]["params"]["K"]
-
-        try:
+        if "K" in cfg["algorithm"]["params"].keys():
             row["K"] = cfg["algorithm"]["params"]["K"]
-        except KeyError:
+            row["num_atoms"] = cfg["algorithm"]["params"]["K"]
+            row["num_contrastive_parameters"] = cfg["algorithm"]["params"]["K"] + 1
+        elif "num_atoms" in cfg["algorithm"]["params"].keys():
             row["K"] = cfg["algorithm"]["params"]["num_atoms"]
+            row["num_atoms"] = cfg["algorithm"]["params"]["num_atoms"]
+            row["num_contrastive_parameters"] = cfg["algorithm"]["params"]["num_atoms"]
+        else:
+            raise NotImplementedError()
 
         try:
             row["gamma"] = cfg["algorithm"]["params"]["gamma"]

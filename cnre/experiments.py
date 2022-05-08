@@ -51,6 +51,28 @@ def classifier_logits(
     return classifier([atomic_theta, repeated_x])
 
 
+def classifier_logits_cheap_prior(
+    classifier: torch.nn.Module,
+    theta: torch.Tensor,
+    x: torch.Tensor,
+    K: int,
+    extra_theta: torch.Tensor,
+) -> torch.Tensor:
+    """Return logits obtained through classifier forward pass.
+
+    The logits are obtained from atomic sets of (theta,x) pairs.
+    """
+    batch_size = theta.shape[0]
+    repeated_x = repeat_rows(x, K + 1)
+    extra_theta = extra_theta[: batch_size * K]
+    extra_theta = extra_theta[torch.randperm(batch_size * K), ...]
+    extra_theta = extra_theta.reshape(batch_size, K, theta.shape[-1])
+    atomic_theta = torch.cat((theta[:, None, :], extra_theta), dim=1).reshape(
+        batch_size * (K + 1), -1
+    )
+    return classifier([atomic_theta, repeated_x])
+
+
 def loss_bce(
     classifier: torch.nn.Module,
     theta: torch.Tensor,
@@ -82,26 +104,13 @@ def loss_bce(
     # return torch.nn.functional.binary_cross_entropy_with_logits(logits, labels, reduction="none")
 
 
-def loss(
-    classifier: torch.nn.Module,
-    theta: torch.Tensor,
-    x: torch.Tensor,
+def compute_loss_on_logits_marginal_and_joint(
+    logits_marginal: torch.Tensor,
+    logits_joint: torch.tensor,
+    batch_size: int,
     K: int,
     gamma: float,
-    reuse: bool,
-    extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """K = num_atoms + 1 because it's num_atoms joint samples and one marginal sample."""
-    assert K >= 1
-    assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
-    batch_size = theta.shape[0]
-    if reuse:
-        logits_marginal = classifier_logits(classifier, theta, x, K, extra_theta)
-        logits_joint = torch.clone(logits_marginal)
-    else:
-        logits_marginal = classifier_logits(classifier, theta, x, K, extra_theta)
-        logits_joint = classifier_logits(classifier, theta, x, K, extra_theta)
-
     dtype = logits_marginal.dtype
     device = logits_marginal.device
 
@@ -143,25 +152,28 @@ def loss(
     # return -(pm * log_prob_marginal + pj * K * log_prob_joint)
 
 
-def classifier_logits_cheap_prior(
+def loss(
     classifier: torch.nn.Module,
     theta: torch.Tensor,
     x: torch.Tensor,
     K: int,
-    extra_theta: torch.Tensor,
+    gamma: float,
+    reuse: bool,
+    extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """Return logits obtained through classifier forward pass.
-
-    The logits are obtained from atomic sets of (theta,x) pairs.
-    """
+    """K = num_atoms + 1 because it's num_atoms joint samples and one marginal sample."""
+    assert K >= 1
+    assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
     batch_size = theta.shape[0]
-    repeated_x = repeat_rows(x, K + 1)
-    extra_theta = extra_theta[: batch_size * K]
-    extra_theta = extra_theta.reshape(batch_size, K, theta.shape[-1])
-    atomic_theta = torch.cat((theta[:, None, :], extra_theta), dim=1).reshape(
-        batch_size * (K + 1), -1
+    if reuse:
+        logits_marginal = classifier_logits(classifier, theta, x, K, extra_theta)
+        logits_joint = torch.clone(logits_marginal)
+    else:
+        logits_marginal = classifier_logits(classifier, theta, x, K, extra_theta)
+        logits_joint = classifier_logits(classifier, theta, x, K, extra_theta)
+    return compute_loss_on_logits_marginal_and_joint(
+        logits_marginal, logits_joint, batch_size, K, gamma
     )
-    return classifier([atomic_theta, repeated_x])
 
 
 def loss_cheap_prior(
@@ -176,55 +188,13 @@ def loss_cheap_prior(
     assert K >= 1
     assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
     batch_size = theta.shape[0]
-    extra_batch_size = extra_theta.shape[0]
     logits_marginal = classifier_logits_cheap_prior(
         classifier, theta, x, K, extra_theta
     )
-    logits_joint = classifier_logits_cheap_prior(
-        classifier,
-        theta,
-        x,
-        K,
-        extra_theta[torch.randperm(extra_batch_size), ...],
+    logits_joint = classifier_logits_cheap_prior(classifier, theta, x, K, extra_theta)
+    return compute_loss_on_logits_marginal_and_joint(
+        logits_marginal, logits_joint, batch_size, K, gamma
     )
-    dtype = logits_marginal.dtype
-    device = logits_marginal.device
-
-    # For 1-out-of-`K + 1` classification each datapoint consists
-    # of `K + 1` points, with one of them being the correct one.
-    # We have a batch of `batch_size` such datapoints.
-    logits_marginal = logits_marginal.reshape(batch_size, K + 1)
-    logits_joint = logits_joint.reshape(batch_size, K + 1)
-
-    # Index 0 is the theta-x-pair sampled from the joint p(theta,x) and hence the
-    # "correct" one for the 1-out-of-N classification.
-    # We remove the jointly drawn sample from the logits_marginal
-    logits_marginal = logits_marginal[:, 1:]
-    # ... and retain it in the logits_joint.
-    logits_joint = logits_joint[:, :-1]
-
-    # To use logsumexp, we extend the denominator logits with loggamma
-    loggamma = torch.tensor(gamma, dtype=dtype, device=device).log()
-    logK = torch.tensor(K, dtype=dtype, device=device).log()
-    denominator_marginal = torch.concat(
-        [loggamma + logits_marginal, logK.expand((batch_size, 1))],
-        dim=-1,
-    )
-    denominator_joint = torch.concat(
-        [loggamma + logits_joint, logK.expand((batch_size, 1))],
-        dim=-1,
-    )
-
-    # Index 0 is the theta-x-pair sampled from the joint p(theta,x) and hence the
-    # "correct" one for the 1-out-of-N classification.
-    log_prob_marginal = logK - torch.logsumexp(denominator_marginal, dim=-1)
-    log_prob_joint = (
-        loggamma + logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
-    )
-
-    # relative weights
-    pm, pj = get_pmarginal_pjoint(K, gamma)
-    return -torch.mean(pm * log_prob_marginal + pj * K * log_prob_joint)
 
 
 def expected_log_ratio(

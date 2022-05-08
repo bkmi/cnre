@@ -97,10 +97,10 @@ def main(cfg: DictConfig) -> None:
     path_predictive_samples_root = Path("predictive_samples")
     path_state_dicts_root = Path("state_dicts")
 
-    path_posterior_samples_root.mkdir()
-    path_log_prob_true_parameters_root.mkdir()
-    path_predictive_samples_root.mkdir()
-    path_state_dicts_root.mkdir()
+    path_posterior_samples_root.mkdir(exist_ok=True)
+    path_log_prob_true_parameters_root.mkdir(exist_ok=True)
+    path_predictive_samples_root.mkdir(exist_ok=True)
+    path_state_dicts_root.mkdir(exist_ok=True)
 
     save_tensor_to_csv(
         path_validation_loss,

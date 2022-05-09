@@ -1,0 +1,3 @@
+num_simulations: ???
+simulation_batch_size: ${data.num_simulations}
+validation_fraction: 0.1

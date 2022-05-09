@@ -213,11 +213,17 @@ class CNRECheapPrior(CNREBase):
 
 class CNREBenchmark(CNREBase):
     def __init__(
-        self, max_steps_per_epoch: int, num_validation_examples: int, *args, **kwargs
+        self,
+        num_simulations: int,
+        simulation_batch_size: int,
+        validation_fraction: float,
+        *args,
+        **kwargs
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.max_steps_per_epoch = max_steps_per_epoch
-        self.num_validation_examples = num_validation_examples
+        self.num_simulations = num_simulations
+        self.simulation_batch_size = simulation_batch_size
+        self.validation_fraction = validation_fraction
 
     def get_dataloaders(
         self,
@@ -233,7 +239,6 @@ class CNREBenchmark(CNREBase):
         extra_train_loader,
         extra_val_loader,
     ) -> Dict:
-        raise NotImplementedError()  # TODO
         return train(
             classifier,
             optimizer,
@@ -245,6 +250,6 @@ class CNREBenchmark(CNREBase):
             K=self.K,
             gamma=self.gamma,
             reuse=self.reuse,
-            max_steps_per_epoch=self.max_steps_per_epoch,
+            max_steps_per_epoch=None,
             state_dict_saving_rate=self.state_dict_saving_rate,
         )

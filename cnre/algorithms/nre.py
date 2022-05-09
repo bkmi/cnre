@@ -518,11 +518,23 @@ class NRECheapPrior(NREBase):
 
 class NREBenchmark(NREBase):
     def __init__(
-        self, max_steps_per_epoch: int, num_validation_examples: int, *args, **kwargs
+        self,
+        num_simulations: int,
+        simulation_batch_size: int,
+        validation_fraction: float,
+        *args,
+        **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.max_steps_per_epoch = max_steps_per_epoch
-        self.num_validation_examples = num_validation_examples
+        self.num_simulations = num_simulations
+        self.simulation_batch_size = simulation_batch_size
+        self.validation_fraction = validation_fraction
+        inference_class = SNRE_B_CheapJoint
+        self.inference_method = inference_class(
+            classifier=self.get_classifier,
+            prior=self.prior,
+            device=self.device_string,
+        )
 
     def get_dataloaders(
         self,
@@ -531,25 +543,20 @@ class NREBenchmark(NREBase):
 
     def train(
         self,
-        classifier,
-        optimizer,
         train_loader,
         val_loader,
-        extra_train_loader,
-        extra_val_loader,
+        *args,
+        **kwargs,
     ) -> Dict:
-        raise NotImplementedError()  # TODO
-        return train(
-            classifier,
-            optimizer,
-            self.max_num_epochs,
+        return self.inference_method.train(
+            len(train_loader),
             train_loader,
-            val_loader,
-            extra_train_loader,
-            extra_val_loader,
-            num_atoms=self.num_atoms,
-            gamma=self.gamma,
-            reuse=self.reuse,
-            max_steps_per_epoch=self.max_steps_per_epoch,
+            val_loader=val_loader,
+            get_optimizer=self.get_optimizer,
+            training_batch_size=self.training_batch_size,
+            learning_rate=self.learning_rate,
+            max_num_epochs=self.max_num_epochs,
+            stop_after_epochs=2**30 - 1,
             state_dict_saving_rate=self.state_dict_saving_rate,
+            **self.inference_method_kwargs,
         )

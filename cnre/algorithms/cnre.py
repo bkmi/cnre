@@ -1,9 +1,12 @@
 from abc import ABC
 from typing import Any, Dict, Optional, Tuple
 
+import torch
+from joblib import Parallel, delayed, parallel_backend
 from sbibm.algorithms.sbi.utils import wrap_posterior
 from sbibm.tasks.task import Task
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import (
@@ -41,8 +44,6 @@ class CNREBase(AlgBase, ABC):
             "thin": 10,
             "warmup_steps": 100,
             "init_strategy": "sir",
-            "sir_batch_size": 1000,
-            "sir_num_batches": 100,
         },
         z_score_x: bool = True,
         z_score_theta: bool = True,
@@ -113,10 +114,32 @@ class CNREBase(AlgBase, ABC):
             self.task.get_observation(num_observation)
             for num_observation in range(1, 11)
         ]
-        samples = [
-            posterior.sample((self.num_posterior_samples,), x=observation).detach()
-            for observation in observations
-        ]
+
+        # if n_jobs is None:
+        if self.sample_with == "rejection":
+            samples = [
+                posterior.sample((self.num_posterior_samples,), x=observation).detach()
+                for observation in observations
+            ]
+        elif (
+            self.sample_with == "mcmc"
+        ):  # this is a hack, it would be better as a parameter of the function TODO
+            samples = [
+                posterior.sample((self.num_posterior_samples,), x=observation).detach()
+                for observation in observations
+            ]
+            # with parallel_backend("loky"):
+            #     samples = Parallel(n_jobs=torch.get_num_threads())(
+            #         delayed(posterior.sample)(
+            #             (self.num_posterior_samples,),
+            #             observation
+            #         )
+            #         for observation in tqdm(
+            #             observations, leave=False, desc="sampling"
+            #         )
+            #     )
+        else:
+            raise NotImplementedError()
 
         return AlgorithmOutput(
             posterior_samples=samples,

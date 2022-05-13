@@ -61,6 +61,9 @@ def main(cfg: DictConfig) -> None:
         torch.set_default_tensor_type(
             "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
         )
+    # elif not gpu and cfg.num_cores is not None:
+    #     log.info(f"setting cfg.num_cores to {torch.get_num_threads()}")
+    #     cfg.num_cores = torch.get_num_threads()
     else:
         device_id = "cpu"
     log.info(

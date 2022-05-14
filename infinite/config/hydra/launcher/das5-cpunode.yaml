@@ -5,3 +5,5 @@ timeout_min: 60
 cpus_per_task: 8
 nodes: 1
 constraint: cpunode
+setup:
+  - module load cuda11.1/toolkit/11.1.1

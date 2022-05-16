@@ -4,6 +4,7 @@ import pandas as pd
 from pandas.core.groupby.generic import DataFrameGroupBy
 
 nre_gamma_default = float("Inf")
+figsize = (2.75, 2.0625)
 
 
 def prepare_df_for_plot(df: pd.DataFrame, expr: str = None) -> pd.DataFrame:

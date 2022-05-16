@@ -45,6 +45,9 @@ python main.py task=bernoulli_glm,lotka_volterra,slcp,gaussian_mixture,gaussian_
 # no julia
 python main.py task=bernoulli_glm,slcp,gaussian_mixture,gaussian_linear_uniform,two_moons,gaussian_linear,slcp_distractors,bernoulli_glm_raw max_num_epochs=1000 algorithm=cnre data=bench data.num_simulations=1_000,10_000,100_000 algorithm.params.num_blocks=3 algorithm.params.hidden_features=128 algorithm.params.state_dict_saving_rate=100 algorithm.params.K=99 algorithm.params.sample_with=mcmc device=cuda:0 hydra/launcher=das5-gpu hydra.launcher.timeout_min=600 --multirun
 
+## with julia
+python main.py task=lotka_volterra,sir,bernoulli_glm,slcp,gaussian_mixture,gaussian_linear_uniform,two_moons,gaussian_linear,slcp_distractors,bernoulli_glm_raw max_num_epochs=1000 algorithm=cnre data=bench data.num_simulations=1_000,10_000,100_000 algorithm.params.num_blocks=3 algorithm.params.hidden_features=128 algorithm.params.state_dict_saving_rate=100 algorithm.params.K=99 algorithm.params.sample_with=mcmc device=cuda:0 hydra/launcher=das5-gpu hydra.launcher.timeout_min=600 --multirun
+
 bernoulli_glm, - good
 lotka_volterra, - julia
 slcp, - good

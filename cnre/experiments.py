@@ -288,8 +288,8 @@ def train(
     best_network_state_dict = None
     min_loss = float("-Inf")
 
-    val_K = K if val_K is None else K
-    val_gamma = gamma if val_gamma is None else gamma
+    val_K = K if val_K is None else val_K
+    val_gamma = gamma if val_gamma is None else val_gamma
 
     # catch infinite training loaders
     try:

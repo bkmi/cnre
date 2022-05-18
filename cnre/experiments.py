@@ -282,9 +282,14 @@ def train(
     max_steps_per_epoch: Optional[int] = None,
     state_dict_saving_rate: Optional[int] = None,
     loss: Callable = loss,
+    val_K: Optional[int] = None,
+    val_gamma: Optional[float] = None,
 ):
     best_network_state_dict = None
     min_loss = float("-Inf")
+
+    val_K = K if val_K is None else K
+    val_gamma = gamma if val_gamma is None else gamma
 
     # catch infinite training loaders
     try:
@@ -301,6 +306,7 @@ def train(
     train_losses = []
     valid_losses = []
     avg_log_ratios = []
+    unnormalized_klds = []
     for epoch in trange(epochs, leave=False):
         # Training
         classifier.train()
@@ -336,6 +342,7 @@ def train(
         with torch.no_grad():
             valid_loss = 0
             avg_log_ratio = 0
+            unnormalized_kld = 0
             for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
                 val_loader, extra_val_loader
             ):
@@ -343,15 +350,20 @@ def train(
                     classifier,
                     theta,
                     x,
-                    K,
-                    gamma=gamma,
+                    val_K,
+                    gamma=val_gamma,
                     reuse=reuse,
                     extra_theta=extra_theta,
                 )
+                _lnr = classifier([theta, x])
                 valid_loss += _loss.detach().cpu().mean().numpy()
-                avg_log_ratio += classifier([theta, x]).detach().cpu().mean().numpy()
+                avg_log_ratio += _lnr.detach().cpu().mean().numpy()
+                unnormalized_kld += (
+                    (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
+                )
             valid_losses.append(valid_loss / len(val_loader))
             avg_log_ratios.append(avg_log_ratio / len(val_loader))
+            unnormalized_klds.append(unnormalized_kld / len(val_loader))
             if epoch == 0 or min_loss > valid_loss:
                 min_loss = valid_loss
                 best_network_state_dict = deepcopy(classifier.state_dict())
@@ -369,6 +381,7 @@ def train(
         train_losses=train_losses,
         valid_losses=valid_losses,
         avg_log_ratios=avg_log_ratios,
+        unnormalized_klds=unnormalized_klds,
         best_network_state_dict=best_network_state_dict,
         last_state_dict=deepcopy(classifier.state_dict()),
         state_dicts=state_dicts,

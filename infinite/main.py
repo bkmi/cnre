@@ -95,6 +95,7 @@ def main(cfg: DictConfig) -> None:
     path_validation_loss = "validation_loss.csv"
     path_avg_log_ratio = "avg_log_ratio.csv"
     path_avg_log_ratios = "avg_log_ratios.csv"
+    path_unnormalized_klds = "unnormalized_klds.csv"
     path_posterior_samples_root = Path("posterior_samples")
     path_log_prob_true_parameters_root = Path("log_prob_true_parameters")
     path_predictive_samples_root = Path("predictive_samples")
@@ -114,6 +115,11 @@ def main(cfg: DictConfig) -> None:
         path_avg_log_ratios,
         torch.tensor(output.avg_log_ratios, dtype=torch.float32),
         columns=["avg_log_ratios"],
+    )
+    save_tensor_to_csv(
+        path_unnormalized_klds,
+        torch.tensor(output.unnormalized_klds, dtype=torch.float32),
+        columns=["unnormalized_klds"],
     )
     save_float_to_csv(path_avg_log_ratio, output.avg_log_ratio)
     save_float_to_csv(path_runtime, runtime)

@@ -1,3 +1,7 @@
+# images and pdf
+*.png
+*.pdf
+
 # direnv
 .envrc
 
@@ -11,6 +15,7 @@ cnre/__version__.py
 **/outputs/
 **/multirun/
 **/sbi-logs/
+**/lightning_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

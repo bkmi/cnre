@@ -50,6 +50,8 @@ class CNREBase(AlgBase, ABC):
         state_dict_saving_rate: Optional[int] = None,
         gamma: float = 1.0,
         reuse: bool = False,
+        val_K: Optional[int] = None,
+        val_gamma: Optional[int] = None,
     ) -> None:
         super().__init__(
             task,
@@ -71,6 +73,8 @@ class CNREBase(AlgBase, ABC):
         )
         self.K = K
         self.gamma = gamma
+        self.val_K = val_K
+        self.val_gamma = val_gamma
         self.reuse = reuse
 
     def run(self) -> AlgorithmOutput:
@@ -148,6 +152,7 @@ class CNREBase(AlgBase, ABC):
             avg_log_ratio=avg_log_ratio,
             state_dicts=results["state_dicts"],
             avg_log_ratios=results["avg_log_ratios"],
+            unnormalized_kld=results["unnormalized_kld"],
         )
 
 
@@ -186,6 +191,8 @@ class CNRECheapJoint(CNREBase):
             reuse=self.reuse,
             max_steps_per_epoch=self.max_steps_per_epoch,
             state_dict_saving_rate=self.state_dict_saving_rate,
+            val_K=self.val_K,
+            val_gamma=self.val_gamma,
         )
 
 
@@ -231,6 +238,8 @@ class CNRECheapPrior(CNREBase):
             max_steps_per_epoch=None,
             state_dict_saving_rate=self.state_dict_saving_rate,
             loss=loss_cheap_prior,
+            val_K=self.val_K,
+            val_gamma=self.val_gamma,
         )
 
 
@@ -275,4 +284,6 @@ class CNREBenchmark(CNREBase):
             reuse=self.reuse,
             max_steps_per_epoch=None,
             state_dict_saving_rate=self.state_dict_saving_rate,
+            val_K=self.val_K,
+            val_gamma=self.val_gamma,
         )

@@ -59,6 +59,9 @@ sir, - julia
 slcp_distractors, - good
 bernoulli_glm_raw -
 
+## to fix validation loss
+python main.py task=slcp max_num_epochs=1000 algorithm=cnre data=bench data.num_simulations=22_528 data.validation_fraction=0.090909 algorithm.params.num_blocks=3 algorithm.params.hidden_features=128 algorithm.params.state_dict_saving_rate=100 algorithm.params.K=99 device=cuda:0 hydra/launcher=das5-gpu hydra.launcher.timeout_min=600 --multirun
+
 
 # old prior calls before fix of validation fraction!!
 fix prior by setting

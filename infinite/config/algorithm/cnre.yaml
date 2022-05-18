@@ -21,3 +21,5 @@ params:
   z_score_theta: independent
   state_dict_saving_rate: null
   gamma: 1.0
+  val_K: null
+  val_gamma: null

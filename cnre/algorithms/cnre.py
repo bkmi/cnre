@@ -152,7 +152,7 @@ class CNREBase(AlgBase, ABC):
             avg_log_ratio=avg_log_ratio,
             state_dicts=results["state_dicts"],
             avg_log_ratios=results["avg_log_ratios"],
-            unnormalized_kld=results["unnormalized_kld"],
+            unnormalized_klds=results["unnormalized_klds"],
         )
 
 

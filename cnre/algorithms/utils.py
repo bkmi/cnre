@@ -22,7 +22,7 @@ class AlgorithmOutput:
         default_factory=lambda: [float("nan")] * 10
     )
     avg_log_ratios: Sequence[float] = field(default_factory=lambda: [float("nan")])
-    unnormalized_kld: Sequence[float] = field(default_factory=lambda: [float("nan")])
+    unnormalized_klds: Sequence[float] = field(default_factory=lambda: [float("nan")])
 
 
 def get_cheap_joint_dataloaders(

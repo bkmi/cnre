@@ -38,9 +38,11 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
         clip_max_norm: Optional[float] = 5.0,
         show_train_summary: bool = False,
         state_dict_saving_rate: int = 100,
+        val_num_atoms: Optional[int] = None,
     ) -> nn.Module:
         self._state_dicts = {}
         self._avg_log_ratios = []
+        self._unnormalized_klds = []
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -49,6 +51,8 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
                 "num_atoms", num_atoms, min_val=2, max_val=clipped_batch_size
             )
         )
+
+        val_num_atoms = num_atoms if val_num_atoms is None else val_num_atoms
 
         for theta, x in train_loader:
             break
@@ -101,20 +105,24 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
             self._neural_net.eval()
             val_log_prob_sum = 0
             avg_log_ratio = 0
+            unnormalized_kld = 0
             with torch.no_grad():
                 for batch in val_loader:
                     theta_batch, x_batch = (
                         batch[0].to(self._device),
                         batch[1].to(self._device),
                     )
-                    val_losses = self._loss(theta_batch, x_batch, num_atoms)
+                    _lnr = self._neural_net([theta, x])
+                    val_losses = self._loss(theta_batch, x_batch, val_num_atoms)
                     val_log_prob_sum -= val_losses.sum().item()
-                    avg_log_ratio += (
-                        self._neural_net([theta, x]).detach().cpu().mean().numpy()
+                    avg_log_ratio += _lnr.detach().cpu().mean().numpy()
+                    unnormalized_kld += (
+                        (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
                     )
                 self._val_log_prob = val_log_prob_sum / (
                     len(val_loader) * clipped_batch_size  # type: ignore
                 )
+                self._unnormalized_klds.append(unnormalized_kld / len(val_loader))
                 self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
@@ -196,9 +204,11 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
         clip_max_norm: Optional[float] = 5.0,
         show_train_summary: bool = False,
         state_dict_saving_rate: int = 100,
+        val_num_atoms=Optional[int],
     ) -> nn.Module:
         self._state_dicts = {}
         self._avg_log_ratios = []
+        self._unnormalized_klds = []
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -207,6 +217,7 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
                 "num_atoms", num_atoms, min_val=2, max_val=clipped_batch_size
             )
         )
+        val_num_atoms = num_atoms if val_num_atoms is None else val_num_atoms
 
         for theta, x in train_loader:
             break
@@ -256,23 +267,27 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
             self._neural_net.eval()
             val_log_prob_sum = 0
             avg_log_ratio = 0
+            unnormalized_kld = 0
             with torch.no_grad():
                 for batch, extra_theta in zip(val_loader, extra_val_loader):
                     theta_batch, x_batch = (
                         batch[0].to(self._device),
                         batch[1].to(self._device),
                     )
+                    _lnr = self._neural_net([theta, x])
                     extra_theta = extra_theta.to(self._device)
                     val_losses = self._loss(
-                        theta_batch, x_batch, num_atoms, extra_theta
+                        theta_batch, x_batch, val_num_atoms, extra_theta
                     )
                     val_log_prob_sum -= val_losses.sum().item()
-                    avg_log_ratio += (
-                        self._neural_net([theta, x]).detach().cpu().mean().numpy()
+                    avg_log_ratio += _lnr.detach().cpu().mean().numpy()
+                    unnormalized_kld += (
+                        (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
                     )
                 self._val_log_prob = val_log_prob_sum / (
                     len(val_loader) * clipped_batch_size  # type: ignore
                 )
+                self._unnormalized_klds.append(unnormalized_kld / len(val_loader))
                 self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
@@ -337,6 +352,7 @@ class NREBase(AlgBase, ABC):
         z_score_x: bool = True,
         z_score_theta: bool = True,
         state_dict_saving_rate: Optional[int] = None,
+        val_num_atoms: Optional[int] = None,
     ) -> None:
         super().__init__(
             task,
@@ -357,7 +373,11 @@ class NREBase(AlgBase, ABC):
             state_dict_saving_rate,
         )
         self.num_atoms = num_atoms
-        self.inference_method_kwargs = {"num_atoms": self.num_atoms}
+        self.val_num_atoms = val_num_atoms
+        self.inference_method_kwargs = {
+            "num_atoms": self.num_atoms,
+            "val_num_atoms": self.val_num_atoms,
+        }
         self.device_string = (
             f"{get_default_device().type}:{get_default_device().index}"
             if get_default_device().type == "cuda"
@@ -420,6 +440,7 @@ class NREBase(AlgBase, ABC):
             avg_log_ratio=avg_log_ratio,
             state_dicts=self.inference_method._state_dicts,
             avg_log_ratios=self.inference_method._avg_log_ratios,
+            unnormalized_klds=self.inference_method._unnormalized_klds,
         )
 
 

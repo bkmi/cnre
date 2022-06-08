@@ -3,4 +3,8 @@ try:
 except ModuleNotFoundError:
     __version__ = ""
 
-from cnre.experiments import *
+from cnre.loss import *
+from cnre.metrics import *
+from cnre.posterior import *
+from cnre.simulators import *
+from cnre.train import *

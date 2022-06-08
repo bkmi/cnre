@@ -13,6 +13,7 @@ from sbibm.utils.torch import get_default_device
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.utils.data.dataloader import DataLoader
 
+from cnre import classifier_logits_cheap_prior, expected_log_ratio
 from cnre.algorithms.base import AlgBase
 from cnre.algorithms.utils import (
     AlgorithmOutput,
@@ -20,7 +21,6 @@ from cnre.algorithms.utils import (
     get_cheap_joint_dataloaders,
     get_cheap_prior_dataloaders,
 )
-from cnre.experiments import classifier_logits_cheap_prior, expected_log_ratio
 
 
 class SNRE_B_CheapJoint(inference.SNRE_B):

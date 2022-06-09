@@ -22,6 +22,13 @@ class AlgorithmOutput:
         default_factory=lambda: [float("nan")] * 10
     )
     avg_log_ratios: Sequence[float] = field(default_factory=lambda: [float("nan")])
+    avg_log_zs: Sequence[float] = field(default_factory=lambda: [float("nan")])
+    mutual_information_0s: Sequence[float] = field(
+        default_factory=lambda: [float("nan")]
+    )
+    mutual_information_1s: Sequence[float] = field(
+        default_factory=lambda: [float("nan")]
+    )
     unnormalized_klds: Sequence[float] = field(default_factory=lambda: [float("nan")])
 
 

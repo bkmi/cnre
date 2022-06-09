@@ -145,9 +145,12 @@ class CNREBase(AlgBase, ABC):
             num_simulations=self.simulator.num_simulations,
             validation_loss=results["valid_losses"],
             avg_log_ratio=avg_log_ratio,
+            avg_log_zs=results["avg_log_zs"],
             state_dicts=results["state_dicts"],
             avg_log_ratios=results["avg_log_ratios"],
             unnormalized_klds=results["unnormalized_klds"],
+            mutual_information_0s=results["mutual_information_0s"],
+            mutual_information_1s=results["mutual_information_1s"],
         )
 
 

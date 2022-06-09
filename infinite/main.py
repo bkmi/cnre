@@ -95,6 +95,9 @@ def main(cfg: DictConfig) -> None:
     path_validation_loss = "validation_loss.csv"
     path_avg_log_ratio = "avg_log_ratio.csv"
     path_avg_log_ratios = "avg_log_ratios.csv"
+    path_avg_log_zs = "avg_log_zs.csv"
+    path_mutual_information_0s = "mutual_information_0s.csv"
+    path_mutual_information_1s = "mutual_information_1s.csv"
     path_unnormalized_klds = "unnormalized_klds.csv"
     path_posterior_samples_root = Path("posterior_samples")
     path_log_prob_true_parameters_root = Path("log_prob_true_parameters")
@@ -115,6 +118,21 @@ def main(cfg: DictConfig) -> None:
         path_avg_log_ratios,
         torch.tensor(output.avg_log_ratios, dtype=torch.float32),
         columns=["avg_log_ratios"],
+    )
+    save_tensor_to_csv(
+        path_avg_log_zs,
+        torch.tensor(output.avg_log_zs, dtype=torch.float32),
+        columns=["avg_log_zs"],
+    )
+    save_tensor_to_csv(
+        path_mutual_information_0s,
+        torch.tensor(output.mutual_information_0s, dtype=torch.float32),
+        columns=["mutual_information_0s"],
+    )
+    save_tensor_to_csv(
+        path_mutual_information_1s,
+        torch.tensor(output.mutual_information_1s, dtype=torch.float32),
+        columns=["mutual_information_1s"],
     )
     save_tensor_to_csv(
         path_unnormalized_klds,

@@ -12,6 +12,7 @@ from cnre.metrics import (
     log_normalizing_constant,
     mutual_information_0,
     mutual_information_1,
+    unnormalized_kld,
 )
 
 
@@ -72,6 +73,11 @@ def train(
         max_steps_per_epoch = float("Inf")
 
     num_training_steps = min(max_steps_per_epoch, len_train_loader)
+    M = (
+        val_loader.batch_size - 1
+        if num_theta_for_mutual_information is None
+        else num_theta_for_mutual_information
+    )
 
     state_dicts = {}
     train_losses = []
@@ -119,15 +125,10 @@ def train(
             lnz = 0
             mi0 = 0
             mi1 = 0
-            unnormalized_kld = 0
+            kld = 0
             for (theta, x), (extra_theta,) in iterate_over_two_dataloaders(
                 val_loader, extra_val_loader
             ):
-                M = (
-                    theta.shape[0] - 1
-                    if num_theta_for_mutual_information is None
-                    else num_theta_for_mutual_information
-                )
                 _loss = loss(
                     classifier,
                     theta,
@@ -144,15 +145,13 @@ def train(
                 lnz += _lnz.detach().cpu().mean().numpy()
                 mi0 += mutual_information_0(_lnr, _lnz).detach().cpu().mean().numpy()
                 mi1 += mutual_information_1(_lnr, _lnz).detach().cpu().mean().numpy()
-                unnormalized_kld += (
-                    (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
-                )
+                kld += unnormalized_kld(_lnr).detach().cpu().mean().numpy()
             valid_losses.append(valid_loss / len(val_loader))
             avg_log_ratios.append(avg_log_ratio / len(val_loader))
             avg_log_zs.append(lnz / len(val_loader))
             mutual_information_0s.append(mi0 / len(val_loader))
             mutual_information_1s.append(mi1 / len(val_loader))
-            unnormalized_klds.append(unnormalized_kld / len(val_loader))
+            unnormalized_klds.append(kld / len(val_loader))
             if epoch == 0 or min_loss > valid_loss:
                 min_loss = valid_loss
                 best_network_state_dict = deepcopy(classifier.state_dict())

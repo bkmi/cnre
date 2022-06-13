@@ -42,6 +42,7 @@ def wide_to_long(df: pd.DataFrame) -> Tuple[pd.DataFrame, DataFrameGroupBy]:
             "num_blocks",
             "hidden_features",
             "seed",
+            "path",
         ],
         j="num_observation",
         sep="-",
@@ -58,5 +59,4 @@ def wide_to_long(df: pd.DataFrame) -> Tuple[pd.DataFrame, DataFrameGroupBy]:
             "hidden_features",
         ]
     )
-    grp.count()
     return df_wide, grp

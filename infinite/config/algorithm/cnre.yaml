@@ -23,3 +23,4 @@ params:
   gamma: 1.0
   val_K: null
   val_gamma: null
+  num_theta_for_mutual_information: null

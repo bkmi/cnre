@@ -72,6 +72,10 @@ def mutual_information_1(log_ratio: torch.Tensor, log_z: torch.Tensor) -> torch.
     return torch.mean(log_ratio - log_z.exp() - 1)
 
 
+def unnormalized_kld(log_ratio: torch.Tensor) -> torch.Tensor:
+    return torch.mean(log_ratio + log_ratio.exp().pow(-1) - 1)
+
+
 def estimate_mutual_information(
     loader: DataLoader,
     classifier: torch.nn.Module,

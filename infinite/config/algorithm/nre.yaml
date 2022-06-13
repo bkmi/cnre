@@ -21,3 +21,4 @@ params:
   z_score_theta: independent
   state_dict_saving_rate: null
   val_num_atoms: null
+  num_theta_for_mutual_information: null

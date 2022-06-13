@@ -11,7 +11,7 @@ from sbibm.algorithms.sbi.utils import wrap_posterior
 from sbibm.tasks.task import Task
 from sbibm.utils.torch import get_default_device
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from torch.utils.data.dataloader import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from cnre import classifier_logits_cheap_prior, expected_log_ratio
 from cnre.algorithms.base import AlgBase
@@ -21,14 +21,22 @@ from cnre.algorithms.utils import (
     get_cheap_joint_dataloaders,
     get_cheap_prior_dataloaders,
 )
+from cnre.metrics import (
+    log_normalizing_constant,
+    mutual_information_0,
+    mutual_information_1,
+    unnormalized_kld,
+)
 
 
-class SNRE_B_CheapJoint(inference.SNRE_B):
-    def train(
+class OurSNRE_B(inference.SNRE_B):
+    def _train_loop(
         self,
-        max_steps_per_epoch: int,
-        train_loader,
-        val_loader,
+        max_steps_per_epoch: Optional[int],
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        extra_train_loader: Optional[DataLoader],
+        extra_val_loader: Optional[DataLoader],
         get_optimizer: Callable,
         num_atoms: int = 10,
         training_batch_size: int = 50,
@@ -39,10 +47,14 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
         show_train_summary: bool = False,
         state_dict_saving_rate: int = 100,
         val_num_atoms: Optional[int] = None,
-    ) -> nn.Module:
+        num_theta_for_mutual_information: Optional[int] = None,
+    ):
         self._state_dicts = {}
         self._avg_log_ratios = []
         self._unnormalized_klds = []
+        self._avg_log_zs = []
+        self._mutual_information_0s = []
+        self._mutual_information_1s = []
 
         clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
 
@@ -64,6 +76,17 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
         self.optimizer = get_optimizer(self._neural_net.parameters(), lr=learning_rate)
         self.epoch, self._val_log_prob = 0, float("-Inf")
 
+        max_steps_per_epoch = (
+            max_steps_per_epoch
+            if max_steps_per_epoch is not None
+            else len(train_loader)
+        )
+        M = (
+            val_loader.batch_size - 1
+            if num_theta_for_mutual_information is None
+            else num_theta_for_mutual_information
+        )
+
         while self.epoch <= max_num_epochs and not self._converged(
             self.epoch, stop_after_epochs
         ):
@@ -72,14 +95,19 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
             self._neural_net.train()
             train_log_probs_sum = 0
             counter = 0
-            for batch in train_loader:
+            for batch, extra_theta in zip(train_loader, extra_train_loader):
                 self.optimizer.zero_grad()
                 theta_batch, x_batch = (
                     batch[0].to(self._device),
                     batch[1].to(self._device),
                 )
-
-                train_losses = self._loss(theta_batch, x_batch, num_atoms)
+                extra_theta = (
+                    extra_theta[0].to(self._device)
+                    if isinstance(extra_theta, list)
+                    else extra_theta
+                )
+                extra_theta = extra_theta.to(self._device)
+                train_losses = self._loss(theta_batch, x_batch, num_atoms, extra_theta)
                 train_loss = torch.mean(train_losses)
                 train_log_probs_sum -= train_losses.sum().item()
 
@@ -105,24 +133,46 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
             self._neural_net.eval()
             val_log_prob_sum = 0
             avg_log_ratio = 0
-            unnormalized_kld = 0
+            lnz = 0
+            mi0 = 0
+            mi1 = 0
+            kld = 0
             with torch.no_grad():
-                for batch in val_loader:
+                for batch, extra_theta in zip(val_loader, extra_val_loader):
                     theta_batch, x_batch = (
                         batch[0].to(self._device),
                         batch[1].to(self._device),
                     )
-                    _lnr = self._neural_net([theta, x])
-                    val_losses = self._loss(theta_batch, x_batch, val_num_atoms)
+                    extra_theta = (
+                        extra_theta[0].to(self._device)
+                        if isinstance(extra_theta, list)
+                        else extra_theta
+                    )
+                    extra_theta = extra_theta.to(self._device)
+                    val_losses = self._loss(
+                        theta_batch, x_batch, val_num_atoms, extra_theta
+                    )
+                    _lnr = self._neural_net([theta_batch, x_batch])
+                    _lnz = log_normalizing_constant(
+                        self._neural_net, theta_batch, x_batch, M
+                    )
                     val_log_prob_sum -= val_losses.sum().item()
                     avg_log_ratio += _lnr.detach().cpu().mean().numpy()
-                    unnormalized_kld += (
-                        (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
+                    lnz += _lnz.detach().cpu().mean().numpy()
+                    mi0 += (
+                        mutual_information_0(_lnr, _lnz).detach().cpu().mean().numpy()
                     )
+                    mi1 += (
+                        mutual_information_1(_lnr, _lnz).detach().cpu().mean().numpy()
+                    )
+                    kld += unnormalized_kld(_lnr).detach().cpu().mean().numpy()
                 self._val_log_prob = val_log_prob_sum / (
                     len(val_loader) * clipped_batch_size  # type: ignore
                 )
-                self._unnormalized_klds.append(unnormalized_kld / len(val_loader))
+                self._avg_log_zs.append(lnz / len(val_loader))
+                self._mutual_information_0s.append(mi0 / len(val_loader))
+                self._mutual_information_1s.append(mi1 / len(val_loader))
+                self._unnormalized_klds.append(kld / len(val_loader))
                 self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
                 # Log validation log prob for every epoch.
                 self._summary["validation_log_probs"].append(self._val_log_prob)
@@ -161,8 +211,32 @@ class SNRE_B_CheapJoint(inference.SNRE_B):
 
         return deepcopy(self._neural_net)
 
+    def _loss(
+        self, theta: torch.Tensor, x: torch.Tensor, num_atoms: int, extra_theta: None
+    ) -> torch.Tensor:
+        return super()._loss(theta, x, num_atoms)
 
-class SNRE_B_CheapPrior(inference.SNRE_B):
+    @abstractmethod
+    def train(
+        self,
+        max_steps_per_epoch: int,
+        train_loader,
+        val_loader,
+        get_optimizer: Callable,
+        num_atoms: int = 10,
+        training_batch_size: int = 50,
+        learning_rate: float = 5e-4,
+        stop_after_epochs: int = 20,
+        max_num_epochs: int = 2**31 - 1,
+        clip_max_norm: Optional[float] = 5.0,
+        show_train_summary: bool = False,
+        state_dict_saving_rate: int = 100,
+        val_num_atoms: Optional[int] = None,
+    ) -> nn.Module:
+        raise NotImplementedError()
+
+
+class SNRE_B_CheapPrior(OurSNRE_B):
     def _loss(
         self,
         theta: torch.Tensor,
@@ -204,127 +278,69 @@ class SNRE_B_CheapPrior(inference.SNRE_B):
         clip_max_norm: Optional[float] = 5.0,
         show_train_summary: bool = False,
         state_dict_saving_rate: int = 100,
-        val_num_atoms=Optional[int],
+        val_num_atoms: Optional[int] = None,
+        num_theta_for_mutual_information: Optional[int] = None,
     ) -> nn.Module:
-        self._state_dicts = {}
-        self._avg_log_ratios = []
-        self._unnormalized_klds = []
-
-        clipped_batch_size = min(training_batch_size, val_loader.batch_size)  # type: ignore
-
-        num_atoms = int(
-            clamp_and_warn(
-                "num_atoms", num_atoms, min_val=2, max_val=clipped_batch_size
-            )
+        return self._train_loop(
+            max_steps_per_epoch=None,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            extra_train_loader=extra_train_loader,
+            extra_val_loader=extra_val_loader,
+            get_optimizer=get_optimizer,
+            num_atoms=num_atoms,
+            training_batch_size=training_batch_size,
+            learning_rate=learning_rate,
+            stop_after_epochs=stop_after_epochs,
+            max_num_epochs=max_num_epochs,
+            clip_max_norm=clip_max_norm,
+            show_train_summary=show_train_summary,
+            state_dict_saving_rate=state_dict_saving_rate,
+            val_num_atoms=val_num_atoms,
+            num_theta_for_mutual_information=num_theta_for_mutual_information,
         )
-        val_num_atoms = num_atoms if val_num_atoms is None else val_num_atoms
 
-        for theta, x in train_loader:
-            break
 
-        if self._neural_net is None:
-            self._neural_net = self._build_neural_net(theta, x)
-            self._x_shape = x_shape_from_simulation(x)
-        self._neural_net.to(self._device)
-        self.optimizer = get_optimizer(self._neural_net.parameters(), lr=learning_rate)
-        self.epoch, self._val_log_prob = 0, float("-Inf")
-
-        while self.epoch <= max_num_epochs and not self._converged(
-            self.epoch, stop_after_epochs
-        ):
-
-            # Train for a single epoch.
-            self._neural_net.train()
-            train_log_probs_sum = 0
-            for batch, extra_theta in zip(train_loader, extra_train_loader):
-                self.optimizer.zero_grad()
-                theta_batch, x_batch = (
-                    batch[0].to(self._device),
-                    batch[1].to(self._device),
-                )
-                extra_theta = extra_theta.to(self._device)
-
-                train_losses = self._loss(theta_batch, x_batch, num_atoms, extra_theta)
-                train_loss = torch.mean(train_losses)
-                train_log_probs_sum -= train_losses.sum().item()
-
-                train_loss.backward()
-                if clip_max_norm is not None:
-                    clip_grad_norm_(
-                        self._neural_net.parameters(),
-                        max_norm=clip_max_norm,
-                    )
-                self.optimizer.step()
-
-            self.epoch += 1
-
-            train_log_prob_average = train_log_probs_sum / (
-                len(train_loader) * clipped_batch_size  # type: ignore
-            )
-            self._summary["train_log_probs"].append(train_log_prob_average)
-
-            # Calculate validation performance.
-            self._neural_net.eval()
-            val_log_prob_sum = 0
-            avg_log_ratio = 0
-            unnormalized_kld = 0
-            with torch.no_grad():
-                for batch, extra_theta in zip(val_loader, extra_val_loader):
-                    theta_batch, x_batch = (
-                        batch[0].to(self._device),
-                        batch[1].to(self._device),
-                    )
-                    _lnr = self._neural_net([theta, x])
-                    extra_theta = extra_theta.to(self._device)
-                    val_losses = self._loss(
-                        theta_batch, x_batch, val_num_atoms, extra_theta
-                    )
-                    val_log_prob_sum -= val_losses.sum().item()
-                    avg_log_ratio += _lnr.detach().cpu().mean().numpy()
-                    unnormalized_kld += (
-                        (_lnr + _lnr.exp().pow(-1) - 1).detach().cpu().mean().numpy()
-                    )
-                self._val_log_prob = val_log_prob_sum / (
-                    len(val_loader) * clipped_batch_size  # type: ignore
-                )
-                self._unnormalized_klds.append(unnormalized_kld / len(val_loader))
-                self._avg_log_ratios.append(avg_log_ratio / len(val_loader))
-                # Log validation log prob for every epoch.
-                self._summary["validation_log_probs"].append(self._val_log_prob)
-
-                if (
-                    state_dict_saving_rate is not None
-                    and self.epoch % state_dict_saving_rate == 0
-                ):
-                    self._state_dicts[self.epoch] = deepcopy(
-                        self._neural_net.state_dict()
-                    )
-
-            self._maybe_show_progress(self._show_progress_bars, self.epoch)
-
-        self._report_convergence_at_end(self.epoch, stop_after_epochs, max_num_epochs)
-
-        # Update summary.
-        self._summary["epochs"].append(self.epoch)
-        self._summary["best_validation_log_probs"].append(self._best_val_log_prob)
-
-        # # Update TensorBoard and summary dict.
-        # self._summarize(
-        #     round_=self._round,
-        #     x_o=None,
-        #     theta_bank=theta,
-        #     x_bank=x,
-        # )
-
-        # Update description for progress bar.
-        if show_train_summary:
-            print(self._describe_round(self._round, self._summary))
-
-        # Avoid keeping the gradients in the resulting network, which can
-        # cause memory leakage when benchmarking.
-        self._neural_net.zero_grad(set_to_none=True)
-
-        return deepcopy(self._neural_net)
+class SNRE_B_CheapJoint(OurSNRE_B):
+    def train(
+        self,
+        max_steps_per_epoch: int,
+        train_loader,
+        val_loader,
+        get_optimizer: Callable,
+        num_atoms: int = 10,
+        training_batch_size: int = 50,
+        learning_rate: float = 5e-4,
+        stop_after_epochs: int = 20,
+        max_num_epochs: int = 2**31 - 1,
+        clip_max_norm: Optional[float] = 5.0,
+        show_train_summary: bool = False,
+        state_dict_saving_rate: int = 100,
+        val_num_atoms: Optional[int] = None,
+        num_theta_for_mutual_information: Optional[int] = None,
+    ) -> nn.Module:
+        dataset = TensorDataset(
+            torch.zeros((training_batch_size * max_steps_per_epoch, 0))
+        )
+        extra_loader = DataLoader(dataset, batch_size=training_batch_size)
+        return self._train_loop(
+            max_steps_per_epoch=max_steps_per_epoch,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            extra_train_loader=extra_loader,
+            extra_val_loader=extra_loader,
+            get_optimizer=get_optimizer,
+            num_atoms=num_atoms,
+            training_batch_size=training_batch_size,
+            learning_rate=learning_rate,
+            stop_after_epochs=stop_after_epochs,
+            max_num_epochs=max_num_epochs,
+            clip_max_norm=clip_max_norm,
+            show_train_summary=show_train_summary,
+            state_dict_saving_rate=state_dict_saving_rate,
+            val_num_atoms=val_num_atoms,
+            num_theta_for_mutual_information=num_theta_for_mutual_information,
+        )
 
 
 class NREBase(AlgBase, ABC):
@@ -353,6 +369,7 @@ class NREBase(AlgBase, ABC):
         z_score_theta: bool = True,
         state_dict_saving_rate: Optional[int] = None,
         val_num_atoms: Optional[int] = None,
+        num_theta_for_mutual_information: Optional[int] = None,
     ) -> None:
         super().__init__(
             task,
@@ -374,9 +391,11 @@ class NREBase(AlgBase, ABC):
         )
         self.num_atoms = num_atoms
         self.val_num_atoms = val_num_atoms
+        self.num_theta_for_mutual_information = num_theta_for_mutual_information
         self.inference_method_kwargs = {
             "num_atoms": self.num_atoms,
             "val_num_atoms": self.val_num_atoms,
+            "num_theta_for_mutual_information": self.num_theta_for_mutual_information,
         }
         self.device_string = (
             f"{get_default_device().type}:{get_default_device().index}"
@@ -438,9 +457,12 @@ class NREBase(AlgBase, ABC):
                 -i for i in self.inference_method._summary["validation_log_probs"]
             ],
             avg_log_ratio=avg_log_ratio,
+            avg_log_zs=self.inference_method._avg_log_zs,
             state_dicts=self.inference_method._state_dicts,
             avg_log_ratios=self.inference_method._avg_log_ratios,
             unnormalized_klds=self.inference_method._unnormalized_klds,
+            mutual_information_0s=self.inference_method._mutual_information_0s,
+            mutual_information_1s=self.inference_method._mutual_information_1s,
         )
 
 

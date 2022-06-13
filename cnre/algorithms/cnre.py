@@ -47,6 +47,7 @@ class CNREBase(AlgBase, ABC):
         reuse: bool = False,
         val_K: Optional[int] = None,
         val_gamma: Optional[int] = None,
+        num_theta_for_mutual_information: Optional[int] = None,
     ) -> None:
         super().__init__(
             task,
@@ -71,6 +72,7 @@ class CNREBase(AlgBase, ABC):
         self.val_K = val_K
         self.val_gamma = val_gamma
         self.reuse = reuse
+        self.num_theta_for_mutual_information = num_theta_for_mutual_information
 
     def run(self) -> AlgorithmOutput:
         (
@@ -191,6 +193,7 @@ class CNRECheapJoint(CNREBase):
             state_dict_saving_rate=self.state_dict_saving_rate,
             val_K=self.val_K,
             val_gamma=self.val_gamma,
+            num_theta_for_mutual_information=self.num_theta_for_mutual_information,
         )
 
 
@@ -238,6 +241,7 @@ class CNRECheapPrior(CNREBase):
             loss=loss_cheap_prior,
             val_K=self.val_K,
             val_gamma=self.val_gamma,
+            num_theta_for_mutual_information=self.num_theta_for_mutual_information,
         )
 
 
@@ -284,4 +288,5 @@ class CNREBenchmark(CNREBase):
             state_dict_saving_rate=self.state_dict_saving_rate,
             val_K=self.val_K,
             val_gamma=self.val_gamma,
+            num_theta_for_mutual_information=self.num_theta_for_mutual_information,
         )

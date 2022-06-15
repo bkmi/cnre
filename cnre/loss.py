@@ -157,7 +157,7 @@ def loss(
     x: torch.Tensor,
     K: int,
     gamma: float,
-    reuse: bool,
+    reuse: bool = False,
     extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """K = num_atoms + 1 because it's num_atoms joint samples and one marginal sample."""

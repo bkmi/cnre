@@ -1,0 +1,23 @@
+name: InfoRatio
+device: cpu
+params:
+  learning_rate: 5e-4
+  neural_net: resnet
+  hidden_features: 50
+  num_blocks: 2
+  use_batch_norm: true
+  training_batch_size: 1_024
+  automatic_transforms_enabled: true
+  sample_with: rejection
+  mcmc_parameters:
+    num_chains: 100
+    thin: 10
+    warmup_steps: 100
+    init_strategy: sir
+    # num_workers: ${num_cores}
+  z_score_x: independent
+  z_score_theta: independent
+  state_dict_saving_rate: null
+  val_K: 1
+  val_gamma: 1.0
+  num_theta_for_mutual_information: null

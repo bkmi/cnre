@@ -64,16 +64,20 @@ def log_normalizing_constant_cheap_prior(
     return log_ratio.exp().mean(dim=1).log()
 
 
-def mutual_information_0(log_ratio: torch.Tensor, log_z: torch.Tensor) -> torch.Tensor:
-    return torch.mean(log_ratio - log_z)
+def mutual_information_0(
+    log_ratio: torch.Tensor, log_z: torch.Tensor, dim: int = -1
+) -> torch.Tensor:
+    return torch.mean(log_ratio - log_z, dim=dim)
 
 
-def mutual_information_1(log_ratio: torch.Tensor, log_z: torch.Tensor) -> torch.Tensor:
-    return torch.mean(log_ratio - log_z.exp() - 1)
+def mutual_information_1(
+    log_ratio: torch.Tensor, log_z: torch.Tensor, dim: int = -1
+) -> torch.Tensor:
+    return torch.mean(log_ratio - log_z.exp() + 1, dim=dim)
 
 
-def unnormalized_kld(log_ratio: torch.Tensor) -> torch.Tensor:
-    return torch.mean(log_ratio + log_ratio.exp().pow(-1) - 1)
+def unnormalized_kld(log_ratio: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    return torch.mean(log_ratio + log_ratio.exp().pow(-1) - 1, dim=dim)
 
 
 def estimate_mutual_information(

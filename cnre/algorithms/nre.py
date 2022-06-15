@@ -152,7 +152,7 @@ class OurSNRE_B(inference.SNRE_B):
                     val_losses = self._loss(
                         theta_batch, x_batch, val_num_atoms, extra_theta
                     )
-                    _lnr = self._neural_net([theta_batch, x_batch])
+                    _lnr = self._neural_net([theta_batch, x_batch]).squeeze()
                     _lnz = log_normalizing_constant(
                         self._neural_net, theta_batch, x_batch, M
                     )

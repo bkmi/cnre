@@ -24,6 +24,7 @@ from cnre.algorithms.utils import (
 from cnre.loss import loss as cnre_loss
 from cnre.metrics import (
     log_normalizing_constant,
+    log_normalizing_constant_cheap_prior,
     mutual_information_0,
     mutual_information_1,
     unnormalized_kld,
@@ -251,6 +252,51 @@ class InfoRatioBenchmark(InfoRatioBase):
             max_steps_per_epoch=None,
             state_dict_saving_rate=self.state_dict_saving_rate,
             log_z=log_normalizing_constant,
+            val_K=self.val_K,
+            val_gamma=self.val_gamma,
+            num_theta_for_mutual_information=self.num_theta_for_mutual_information,
+        )
+
+
+class InfoRatioPrior(CNREBase):
+    def __init__(
+        self,
+        num_simulations: int,
+        simulation_batch_size: int,
+        validation_fraction: float,
+        *args,
+        **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.num_simulations = num_simulations
+        self.simulation_batch_size = simulation_batch_size
+        self.validation_fraction = validation_fraction
+
+    def get_dataloaders(
+        self,
+    ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+        return get_cheap_prior_dataloaders(self)
+
+    def train(
+        self,
+        classifier,
+        optimizer,
+        train_loader,
+        val_loader,
+        extra_train_loader,
+        extra_val_loader,
+    ) -> Dict:
+        return train(
+            classifier=classifier,
+            optimizer=optimizer,
+            epochs=self.max_num_epochs,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            extra_train_loader=extra_train_loader,
+            extra_val_loader=extra_val_loader,
+            max_steps_per_epoch=None,
+            state_dict_saving_rate=self.state_dict_saving_rate,
+            log_z=log_normalizing_constant_cheap_prior,
             val_K=self.val_K,
             val_gamma=self.val_gamma,
             num_theta_for_mutual_information=self.num_theta_for_mutual_information,

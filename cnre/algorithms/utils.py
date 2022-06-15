@@ -4,7 +4,7 @@ from typing import Dict, Optional, Sequence, Tuple
 import torch
 from sbi import inference
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.data.dataset import TensorDataset
+from torch.utils.data.dataset import IterableDataset, TensorDataset
 
 from cnre.data.benchmark import get_dataloaders
 from cnre.data.joint import JointSampler, get_endless_train_loader_and_new_valid_loader
@@ -81,3 +81,25 @@ def get_benchmark_dataloaders(self) -> Tuple[DataLoader, DataLoader, None, None]
         dataset, self.training_batch_size, self.validation_fraction
     )
     return train_loader, valid_loader, None, None
+
+
+def iterate_over_two_dataloaders(
+    dl_small: DataLoader, dl_large: Optional[DataLoader]
+) -> Tuple:
+    if dl_large is None:
+        for data_small in dl_small:
+            yield data_small, [None]
+    elif isinstance(dl_large.dataset, IterableDataset):
+        # for the infinite large case
+        for data_small, data_large in zip(dl_small, dl_large):
+            yield data_small, [data_large]
+    else:
+        assert len(dl_small) <= len(dl_large)
+        dl_iterator_small = iter(dl_small)
+        for data_large in dl_large:
+            try:
+                data_small = next(dl_iterator_small)
+            except StopIteration:
+                dl_iterator_small = iter(dl_small)
+                data_small = next(dl_iterator_small)
+            yield data_small, data_large

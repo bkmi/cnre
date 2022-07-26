@@ -93,7 +93,7 @@ class OurSNRE_B(inference.SNRE_B):
 
             # Train for a single epoch.
             self._neural_net.train()
-            train_log_probs_sum = 0
+            training_log_probs_sum = 0
             counter = 0
             for batch, extra_theta in zip(train_loader, extra_train_loader):
                 self.optimizer.zero_grad()
@@ -109,7 +109,7 @@ class OurSNRE_B(inference.SNRE_B):
                 extra_theta = extra_theta.to(self._device)
                 train_losses = self._loss(theta_batch, x_batch, num_atoms, extra_theta)
                 train_loss = torch.mean(train_losses)
-                train_log_probs_sum -= train_losses.sum().item()
+                training_log_probs_sum -= train_losses.sum().item()
 
                 train_loss.backward()
                 if clip_max_norm is not None:
@@ -124,10 +124,10 @@ class OurSNRE_B(inference.SNRE_B):
 
             self.epoch += 1
 
-            train_log_prob_average = train_log_probs_sum / (
+            training_log_prob_average = training_log_probs_sum / (
                 max_steps_per_epoch * clipped_batch_size  # type: ignore
             )
-            self._summary["train_log_probs"].append(train_log_prob_average)
+            self._summary["training_log_probs"].append(training_log_prob_average)
 
             # Calculate validation performance.
             self._neural_net.eval()
@@ -190,8 +190,8 @@ class OurSNRE_B(inference.SNRE_B):
         self._report_convergence_at_end(self.epoch, stop_after_epochs, max_num_epochs)
 
         # Update summary.
-        self._summary["epochs"].append(self.epoch)
-        self._summary["best_validation_log_probs"].append(self._best_val_log_prob)
+        self._summary["epochs_trained"].append(self.epoch)
+        self._summary["best_validation_log_prob"].append(self._best_val_log_prob)
 
         # # Update TensorBoard and summary dict.
         # self._summarize(

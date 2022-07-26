@@ -1,7 +1,0 @@
-enqueue:
-  job_timeout: '1000d'
-  ttl: '1000d'
-  result_ttl: '1000d'
-  failure_ttl: '1000d'
-queue: default
-stop_after_enqueue: true

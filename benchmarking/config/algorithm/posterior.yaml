@@ -1,5 +1,0 @@
-name: Posterior
-run: pytorch.baseline_posterior.run
-device: cpu
-params:
-  rerun: True

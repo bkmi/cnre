@@ -7,3 +7,6 @@
 [submodule "remote/results"]
 	path = remote/results
 	url = git@github.com:sbi-benchmark/results.git
+[submodule "remote/diffeqtorch"]
+	path = remote/diffeqtorch
+	url = git@github.com:sbi-benchmark/diffeqtorch.git

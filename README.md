@@ -51,4 +51,4 @@ We depend on four packages.
 - `diffeqtorch` - Necessary for the simulation-based inference benchmark problems lotka voltera and sir.
 - `results` - Necessary to compare our results with the simulation-based inference benchmark.
 - `sbi` - Contains alternative simulation-based inference algorithms.
-- `sbibm` - Contains the toy problems which we test on in the paper.l
+- `sbibm` - Contains the toy problems which we test on in the paper.

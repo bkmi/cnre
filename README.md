@@ -2,10 +2,10 @@
 In this repository, we estimate the likelihood-to-evidence ratio from simulated data and parameters pairs in order to determine the posterior distribution. It is a so-called simulation-based inference method... also known as likelihood-free inference or implicit likelihood. The algorithm we propose generalizes [amortized approximate likelihood-ratio estimation](https://arxiv.org/abs/1903.04057) (NRE-A) and [sequential ratio estimation](https://arxiv.org/abs/2002.03712) (NRE-B) into a unified framework that we call [Contrastive Neural Ratio Estimation](https://arxiv.org/abs/2210.06170) (NRE-C). The paper which introduces the method was published at [NeurIPS 2022](https://neurips.cc/virtual/2022/poster/54994) by Benjamin Kurt Miller, Christoph Weniger, and Patrick Forré.
 
 ## the folders explained
-- `cnre/` (contains several experiments)
-- `cnre/cnre` (the package itself)
-- `cnre/infinite` (the hydra script folder for all experiments, the benchmarking location)
-- `cnre/remote` (packages that our repository depends on)
+- `cnre/` - contains several experiments.
+- `cnre/cnre` - the package itself.
+- `cnre/infinite`- the hydra script folder for all experiments, the benchmarking location.
+- `cnre/remote` - packages that our repository depends on.
 
 ### `cnre/`
 There are two legacy jupyter notebooks that show our initial investigations.

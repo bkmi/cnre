@@ -2,14 +2,24 @@
 In this repository, we estimate the likelihood-to-evidence ratio from simulated data and parameters pairs in order to determine the posterior distribution. It is a so-called simulation-based inference method... also known as likelihood-free inference or implicit likelihood. The algorithm we propose generalizes [amortized approximate likelihood-ratio estimation](https://arxiv.org/abs/1903.04057) (NRE-A) and [sequential ratio estimation](https://arxiv.org/abs/2002.03712) (NRE-B) into a unified framework that we call [Contrastive Neural Ratio Estimation](https://arxiv.org/abs/2210.06170) (NRE-C). The paper which introduces the method was published at [NeurIPS 2022](https://neurips.cc/virtual/2022/poster/54994) by Benjamin Kurt Miller, Christoph Weniger, and Patrick Forré.
 
 ## the folders explained
-- cnre (the package itself)
-- infinite (the hydra script folder for all experiments, the benchmarking location)
-- remote (packages that our repository depends on)
+- `cnre/` (contains several experiments)
+- `cnre/cnre` (the package itself)
+- `cnre/infinite` (the hydra script folder for all experiments, the benchmarking location)
+- `cnre/remote` (packages that our repository depends on)
 
-### cnre
+### `cnre/`
+There are two legacy jupyter notebooks that show our initial investigations.
+- `00 is it real.ipynb` - A simple test of the performance between existing algorithms NRE-A and NRE-B
+- `01 basic algorithm.ipynb` - A simple implementation of our algorithm. We check whether increasing the number of contrastive parameters helps on one posterior.
+
+Then there are a few jupyter notebooks which produced plots that we used in the paper.
+- `importance sampling diagnostic.ipynb` - Shows that the importance sampling diagnostic fails for NRE-B, but succeeds for NRE-C. Figure 3.
+- `loss-summary-diagram.ipynb` - Creates two plots of a joint and product of marginal distribution for the schematic diagram of the loss function. Figure 2.
+
+### `cnre/cnre`
 Contains the algorithm and other tools for creating and evaluating the data.
 
-### infinite
+### `cnre/infinite`
 Contains the results from our experiments along with the jupyter notebooks we used to create the plots in paper. Since this section uses [hydra](https://hydra.cc/), we have a `config/` folder. The calls made to produce the data are listed in `calls.md`. The raw data from the runs is in the process of being uploaded to Zenodo.
 
 The python files:
@@ -36,7 +46,7 @@ These notebooks draw from metric summary `.csv` files. Creating the metrics for 
 - `metrics-sbibm-extra.csv` - Section 3 Benchmark
 - `metrics-sbibm.csv` - Section 3 Benchmark
 
-### remote
+### `cnre/remote`
 We depend on four packages.
 - `diffeqtorch` - Necessary for the simulation-based inference benchmark problems lotka voltera and sir.
 - `results` - Necessary to compare our results with the simulation-based inference benchmark.

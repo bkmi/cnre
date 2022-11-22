@@ -160,7 +160,7 @@ def loss(
     reuse: bool = False,
     extra_theta: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """K = num_atoms + 1 because it's num_atoms joint samples and one marginal sample."""
+    """K = num_atoms - 1 because it's num_atoms joint samples and one extra marginal sample."""
     assert K >= 1
     assert theta.shape[0] == x.shape[0], "Batch sizes for theta and x must match."
     batch_size = theta.shape[0]

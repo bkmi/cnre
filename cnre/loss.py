@@ -11,6 +11,7 @@ def get_pmarginal_pjoint(K: int, gamma: float) -> float:
     assert K >= 1
     p_joint = gamma / (1 + gamma * K)
     p_marginal = 1 / (1 + gamma * K)
+    raise NotImplementedError("there is a bug in this computation. refer to https://github.com/mackelab/sbi/blob/main/sbi/inference/snre/snre_c.py")
     return p_marginal, p_joint
 
 

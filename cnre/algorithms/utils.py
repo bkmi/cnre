@@ -36,7 +36,10 @@ def get_cheap_joint_dataloaders(
     self,
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader], Optional[DataLoader]]:
     dataset = JointSampler(self.simulator, self.prior, self.training_batch_size)
-    (train_loader, valid_loader,) = get_endless_train_loader_and_new_valid_loader(
+    (
+        train_loader,
+        valid_loader,
+    ) = get_endless_train_loader_and_new_valid_loader(
         dataset,
         self.num_validation_examples,
     )

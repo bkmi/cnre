@@ -9,7 +9,7 @@ dependencies:
   # fixing the following 3 makes the install work for me
   - pytorch::pytorch==1.13.1=py3.8_cuda11.7_cudnn8.5.0_0
   - pytorch::pytorch-cuda=11.7
-  - mkl=2022.2.1  # might work: mkl<2024
+  - mkl<2024
   - jupyter
   - scipy
   - pandas

@@ -1,0 +1,13 @@
+defaults:
+  - submitit_slurm
+
+timeout_min: 60
+cpus_per_task: 8
+gpus_per_node: 1
+nodes: 1
+partition: defq
+constraint: gpunode
+exclude: null
+additional_parameters:
+  gres: gpu:1
+setup: null

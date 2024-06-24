@@ -3,6 +3,22 @@
 # Contrastive Neural Ratio Estimation
 In this repository, we estimate the likelihood-to-evidence ratio from simulated data and parameters pairs in order to determine the posterior distribution. It is a so-called simulation-based inference method... also known as likelihood-free inference or implicit likelihood. The algorithm we propose generalizes [amortized approximate likelihood-ratio estimation](https://arxiv.org/abs/1903.04057) (NRE-A) and [sequential ratio estimation](https://arxiv.org/abs/2002.03712) (NRE-B) into a unified framework that we call [Contrastive Neural Ratio Estimation](https://arxiv.org/abs/2210.06170) (NRE-C). The paper which introduces the method was published at [NeurIPS 2022](https://neurips.cc/virtual/2022/poster/54994) by Benjamin Kurt Miller, Christoph Weniger, and Patrick Forré.
 
+### Installation
+
+We recommend using `micromamba` because conda is extremely slow. You can install `micromamba` by [following their guide](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#automatic-install). Then create the `cnre` environment:
+
+```bash
+micromamba env create -f environment.yml
+```
+
+If you want to run the examples from `sbibm` that use `julia`, e.g. `Lotka-Voltera`, then you need to install `julia` version `1.5.3` and run the following commands:
+
+```bash
+micromamba activate cnre
+export JULIA_SYSIMAGE_DIFFEQTORCH="$HOME/.julia_sysimage_diffeqtorch.so"
+python -c "from diffeqtorch.install import install_and_test; install_and_test()"
+```
+
 ## the folders explained
 - `cnre/` - contains several experiments.
 - `cnre/cnre` - the package itself.

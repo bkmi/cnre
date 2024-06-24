@@ -1,0 +1,36 @@
+name: cnre
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.8
+  - numpy<2.0
+  - jupyter
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - pytest
+  - black
+  - isort
+  - scikit-learn
+  # DOES NOT WORK:
+  # - pytorch
+  # - pytorch-cuda=11.8
+  # NEED TO IMPLEMENT:
+  # - pytorch=1.11.0=py3.9_cuda11.3_cudnn8.2.0_0
+  - pytorch==1.13.1
+  - pytorch-cuda=11.7
+  - pip
+  - pip:
+    - pyro-ppl==1.8.0
+    - hydra-core==1.1.1
+    - hydra-joblib-launcher==1.1.5
+    - hydra-submitit-launcher==1.1.6
+    - pytorch-lightning==1.6.3
+    - corner
+    - -e remote/diffeqtorch
+    - -e remote/sbi
+    - -e remote/sbibm
+    - -e .

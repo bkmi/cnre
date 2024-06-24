@@ -1,11 +1,15 @@
 name: cnre
 channels:
-  - conda-forge
   - pytorch
   - nvidia
+  - conda-forge
 dependencies:
   - python=3.8
   - numpy<2.0
+  # fixing the following 3 makes the install work for me
+  - pytorch::pytorch==1.13.1=py3.8_cuda11.7_cudnn8.5.0_0
+  - pytorch::pytorch-cuda=11.7
+  - mkl=2022.2.1  # might work: mkl<2024
   - jupyter
   - scipy
   - pandas
@@ -15,13 +19,6 @@ dependencies:
   - black
   - isort
   - scikit-learn
-  # DOES NOT WORK:
-  # - pytorch
-  # - pytorch-cuda=11.8
-  # NEED TO IMPLEMENT:
-  # - pytorch=1.11.0=py3.9_cuda11.3_cudnn8.2.0_0
-  - pytorch==1.13.1
-  - pytorch-cuda=11.7
   - pip
   - pip:
     - pyro-ppl==1.8.0

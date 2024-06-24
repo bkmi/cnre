@@ -10,4 +10,5 @@ constraint: gpunode
 exclude: null
 additional_parameters:
   gres: gpu:1
-setup: null
+setup:
+  - module load cuda11.7/toolkit/11.7

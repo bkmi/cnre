@@ -4,6 +4,7 @@ import random
 import socket
 import sys
 import time
+import os
 from pathlib import Path
 
 import hydra
@@ -51,24 +52,28 @@ def main(cfg: DictConfig) -> None:
 
     # Devices
     gpu = True if cfg.device != "cpu" else False
-    if gpu:
+    if gpu and "MIG" in os.environ["CUDA_VISIBLE_DEVICES"]:
+        log.info(f"using pytorch with nvidia MIG, number of available gpus is unknown")
+        device_id = os.environ["CUDA_VISIBLE_DEVICES"]
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        log.info(f"using nvidia MIG device {device_id}")
+    elif gpu and "MIG" not in os.environ["CUDA_VISIBLE_DEVICES"]:
         log.info(f"number of available gpus: {torch.cuda.device_count()}")
         try:
             device_id = int(cfg.device[-1])
         except:
             device_id = 0
         torch.cuda.set_device(device_id)
-        torch.set_default_tensor_type(
-            "torch.cuda.FloatTensor" if gpu else "torch.FloatTensor"
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        log.info(
+            f"using device {torch.device(device_id)} named {torch.cuda.get_device_name()}"
         )
-    # elif not gpu and cfg.num_cores is not None:
-    #     log.info(f"setting cfg.num_cores to {torch.get_num_threads()}")
-    #     cfg.num_cores = torch.get_num_threads()
     else:
+        torch.set_default_tensor_type("torch.FloatTensor")
         device_id = "cpu"
-    log.info(
-        f"using device {torch.device(device_id)} named {torch.cuda.get_device_name()}"
-    )
+        log.info(
+            f"using device {torch.device(device_id)} named {torch.cuda.get_device_name()}"
+        )
 
     # Run
     task = sbibm.get_task(cfg.task.name)

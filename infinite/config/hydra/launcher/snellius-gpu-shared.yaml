@@ -9,3 +9,5 @@ nodes: 1
 partition: gpu_mig
 array_parallelism: 256
 setup: null
+additional_parameters:
+  gpus: 1

@@ -50,14 +50,16 @@ def main(cfg: DictConfig) -> None:
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
 
+    CUDA_VISIBLE_DEVICES = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+
     # Devices
     gpu = True if cfg.device != "cpu" else False
-    if gpu and "MIG" in os.environ["CUDA_VISIBLE_DEVICES"]:
+    if gpu and "MIG" in CUDA_VISIBLE_DEVICES:
         log.info(f"using pytorch with nvidia MIG, number of available gpus is unknown")
-        device_id = os.environ["CUDA_VISIBLE_DEVICES"]
+        device_id = CUDA_VISIBLE_DEVICES
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
         log.info(f"using nvidia MIG device {device_id}")
-    elif gpu and "MIG" not in os.environ["CUDA_VISIBLE_DEVICES"]:
+    elif gpu and "MIG" not in CUDA_VISIBLE_DEVICES:
         log.info(f"number of available gpus: {torch.cuda.device_count()}")
         try:
             device_id = int(cfg.device[-1])

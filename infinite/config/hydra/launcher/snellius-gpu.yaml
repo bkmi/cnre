@@ -1,0 +1,13 @@
+defaults:
+  - submitit_slurm
+
+timeout_min: 60
+cpus_per_task: 18
+gpus_per_node: 1
+mem_gb: 120
+nodes: 1
+partition: gpu
+array_parallelism: 256
+setup: null
+additional_parameters:
+  gpus: 1

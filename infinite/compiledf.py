@@ -151,7 +151,7 @@ def compile_df(
     #     df["num_observation"] = df["num_observation"].astype("category")
 
     print(f"{len(basepaths) - len(df)} were missed")
-    if args.verbose:
+    if verbose:
         for mpb in missed_path_bases:
             print(mpb)
     return df

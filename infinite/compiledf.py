@@ -26,8 +26,9 @@ def compile_df(
     df = []
 
     basepaths = [p.parent for p in Path(root).expanduser().rglob(glob)]
+    missed_path_bases = []
 
-    for i, path_base in tqdm(enumerate(basepaths)):
+    for i, path_base in enumerate(tqdm(basepaths, leave=False)):
         path_metrics = path_base / "metrics.csv"
 
         row = {}
@@ -98,6 +99,7 @@ def compile_df(
             for metric_name, metric_value in metrics_df.items():
                 row[metric_name] = metric_value[0]
         else:
+            missed_path_bases.append(path_base)
             print(f"path {path_base} has no metrics")
             continue
 
@@ -149,6 +151,9 @@ def compile_df(
     #     df["num_observation"] = df["num_observation"].astype("category")
 
     print(f"{len(basepaths) - len(df)} were missed")
+    if verbose:
+        for mpb in missed_path_bases:
+            print(mpb)
     return df
 
 
@@ -157,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument("root", type=Path)
     parser.add_argument("--glob", type=str, default="run.yaml")
     parser.add_argument("--save", type=Path, default=None)
+    parser.add_argument("--verbose", action="store_true", help="Print missed paths")
     args = parser.parse_args()
 
     df = compile_df(args.root, args.glob)

@@ -6,12 +6,16 @@ import torch.nn.functional
 from sbi.utils import repeat_rows
 
 
-def get_pmarginal_pjoint(K: int, gamma: float) -> float:
-    """let the joint class to be equally likely across K options."""
-    assert K >= 1
-    p_joint = gamma / (1 + gamma * K)
-    p_marginal = 1 / (1 + gamma * K)
-    raise NotImplementedError("there is a bug in this computation. refer to https://github.com/mackelab/sbi/blob/main/sbi/inference/snre/snre_c.py")
+def get_pmarginal_pjoint(gamma: float) -> float:
+    r"""Return a tuple (p_marginal, p_joint) where `p_marginal := `$p_0$,
+    `p_joint := `$p_K \cdot K$.
+
+    We let the joint (dependently drawn) class to be equally likely across K
+    options. The marginal class is therefore restricted to get the remaining
+    probability.
+    """
+    p_joint = gamma / (1 + gamma)
+    p_marginal = 1 / (1 + gamma)
     return p_marginal, p_joint
 
 
@@ -146,9 +150,9 @@ def compute_loss_on_logits_marginal_and_joint(
         loggamma + logits_joint[:, 0] - torch.logsumexp(denominator_joint, dim=-1)
     )
 
-    # relative weights
-    pm, pj = get_pmarginal_pjoint(K, gamma)
-    return -torch.mean(pm * log_prob_marginal + pj * K * log_prob_joint)
+    # relative weights. pm := p_0, and pj := p_K * K from the notation.
+    pm, pj = get_pmarginal_pjoint(gamma)
+    return -torch.mean(pm * log_prob_marginal + pj * log_prob_joint)
     # return -(pm * log_prob_marginal + pj * K * log_prob_joint)
 
 

@@ -1,6 +1,13 @@
+<div align="center">
+
+[![arxiv](https://img.shields.io/badge/arxiv-blue)](https://arxiv.org/abs/2210.06170)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7299458.svg)](https://doi.org/10.5281/zenodo.7299458)
 
-# Contrastive Neural Ratio Estimation
+</div>
+
+
+
+# Contrastive Neural Ratio Estimation for Simulation-based Inference
 In this repository, we estimate the likelihood-to-evidence ratio from simulated data and parameters pairs in order to determine the posterior distribution. It is a so-called simulation-based inference method... also known as likelihood-free inference or implicit likelihood. The algorithm we propose generalizes [amortized approximate likelihood-ratio estimation](https://arxiv.org/abs/1903.04057) (NRE-A) and [sequential ratio estimation](https://arxiv.org/abs/2002.03712) (NRE-B) into a unified framework that we call [Contrastive Neural Ratio Estimation](https://arxiv.org/abs/2210.06170) (NRE-C). The paper which introduces the method was published at [NeurIPS 2022](https://neurips.cc/virtual/2022/poster/54994) by Benjamin Kurt Miller, Christoph Weniger, and Patrick Forré.
 
 ### Installation
@@ -38,7 +45,7 @@ Then there are a few jupyter notebooks which produced plots that we used in the 
 Contains the algorithm and other tools for creating and evaluating the data.
 
 ### `cnre/infinite`
-Contains the results from our experiments along with the jupyter notebooks we used to create the plots in paper. Since this section uses [hydra](https://hydra.cc/), we have a `config/` folder. The calls made to produce the data are listed in `calls.md`. The raw data from the runs is in the process of being uploaded to Zenodo.
+Contains the results from our experiments along with the jupyter notebooks we used to create the plots in paper. Since this section uses [hydra](https://hydra.cc/), we have a `config/` folder. The calls made to produce the data are listed in `calls.md`. The raw data from the runs can be found on Zenodo (badge at top of page).
 
 The python files:
 - `compiledf.py` - Takes a folder of results from hydra and summarizes them into a metrics `.csv` file.

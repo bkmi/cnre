@@ -45,7 +45,7 @@ Then there are a few jupyter notebooks which produced plots that we used in the 
 Contains the algorithm and other tools for creating and evaluating the data.
 
 ### `cnre/infinite`
-Contains the results from our experiments along with the jupyter notebooks we used to create the plots in paper. Since this section uses [hydra](https://hydra.cc/), we have a `config/` folder. The calls made to produce the data are listed in `calls.md`. The raw data from the runs can be found on Zenodo (badge at top of page).
+Contains the results from our experiments along with the jupyter notebooks we used to create the plots in paper. Since this section uses [hydra](https://hydra.cc/), we have a `config/` folder. The calls made to produce the data are listed in `calls.md`.
 
 The python files:
 - `compiledf.py` - Takes a folder of results from hydra and summarizes them into a metrics `.csv` file.
